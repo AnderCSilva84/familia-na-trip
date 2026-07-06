@@ -1,0 +1,252 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserEmail() {
+      return isSignedIn() && request.auth.token.email != null
+        ? request.auth.token.email
+        : '';
+    }
+
+    function isDesignatedSuperAdmin() {
+      return isSignedIn() && currentUserEmail() == 'acs@acs.com';
+    }
+
+    function userProfilePath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function currentUserProfilePath() {
+      return userProfilePath(request.auth.uid);
+    }
+
+    function currentUserProfileExists() {
+      return isSignedIn() && exists(currentUserProfilePath());
+    }
+
+    function currentUserProfile() {
+      return get(currentUserProfilePath());
+    }
+
+    function currentUserRole() {
+      return currentUserProfileExists() && currentUserProfile().data.role != null
+        ? currentUserProfile().data.role
+        : '';
+    }
+
+    function isSuperAdmin() {
+      return isDesignatedSuperAdmin() || currentUserRole() == 'superadmin';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (currentUserRole() == 'admin' || isSuperAdmin());
+    }
+
+    function canReadTripData() {
+      return isSignedIn();
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isContentOwner() {
+      return isSignedIn() && resource.data.createdBy == request.auth.uid;
+    }
+
+    function isRequestContentOwner() {
+      return isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+    }
+
+    function canManageContent() {
+      return isSuperAdmin() || isAdmin() || isContentOwner();
+    }
+
+    function canCreateContent() {
+      return isSignedIn();
+    }
+
+    function isSelfUserCreate(userId) {
+      return isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.email == currentUserEmail()
+        && (
+          request.resource.data.role == 'member'
+          || (isDesignatedSuperAdmin() && request.resource.data.role == 'superadmin')
+        );
+    }
+
+    function isSelfUserUpdate(userId) {
+      return isOwner(userId)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.active == resource.data.active;
+    }
+
+    function hasValidManagedRole() {
+      return request.resource.data.role in ['superadmin', 'admin', 'member'];
+    }
+
+    function canCreateManagedUser() {
+      return isSuperAdmin()
+        && request.resource.data.uid != null
+        && request.resource.data.email != null
+        && hasValidManagedRole();
+    }
+
+    function canUpdateManagedUser() {
+      return isSuperAdmin()
+        && request.resource.data.uid == resource.data.uid
+        && hasValidManagedRole();
+    }
+
+    function isMemberSelfRecord() {
+      return isSignedIn() && (
+        resource.data.userId == request.auth.uid
+        || resource.data.email == currentUserEmail()
+      );
+    }
+
+    function canSelfUpdateMember() {
+      return isMemberSelfRecord()
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.roleInTrip == resource.data.roleInTrip
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.active == resource.data.active
+        && (
+          request.resource.data.userId == resource.data.userId
+          || (
+            request.resource.data.userId == request.auth.uid
+            && (
+              resource.data.userId == null
+              || resource.data.userId == ''
+            )
+          )
+        );
+    }
+
+    function canUpdateReadState() {
+      return isSignedIn();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isSuperAdmin();
+      allow create: if isSelfUserCreate(userId) || canCreateManagedUser();
+      allow update: if isSelfUserUpdate(userId) || canUpdateManagedUser();
+      allow delete: if false;
+    }
+
+    match /trips/{tripId} {
+      allow read: if canReadTripData();
+      allow create: if isSignedIn();
+      allow update, delete: if isSuperAdmin() || isAdmin() || isContentOwner();
+    }
+
+    match /members/{memberId} {
+      allow read: if canReadTripData();
+      allow create: if isSuperAdmin() || isAdmin() || request.resource.data.userId == request.auth.uid;
+      allow update: if isSuperAdmin() || isAdmin() || canSelfUpdateMember();
+      allow delete: if isSuperAdmin() || isAdmin();
+    }
+
+    match /itinerary/{itemId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /diary/{entryId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /hotelReservations/{hotelId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /vehicleRental/{vehicleId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /tips/{tipId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /polls/{pollId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update: if isSignedIn();
+      allow delete: if canManageContent();
+    }
+
+    match /agenda/{agendaId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /agendaReviews/{reviewId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update: if isSignedIn();
+      allow delete: if isSuperAdmin() || isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /emergencyContacts/{contactId} {
+      allow read: if canReadTripData();
+      allow create, update, delete: if isSuperAdmin() || isAdmin();
+    }
+
+    match /alarms/{alarmId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update: if canUpdateReadState();
+      allow delete: if canManageContent();
+    }
+
+    match /invites/{inviteId} {
+      allow read: if canReadTripData();
+      allow create, delete: if isSuperAdmin() || isAdmin();
+      allow update: if isSuperAdmin() || isAdmin() || (isSignedIn() && resource.data.email == currentUserEmail());
+    }
+
+    match /mapPoints/{pointId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /importLogs/{importLogId} {
+      allow read: if canReadTripData();
+      allow create, update, delete: if isSuperAdmin() || isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
