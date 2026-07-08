@@ -15,14 +15,14 @@ const initialForm = {
 
 function LoginPage() {
   const navigate = useNavigate()
-  const { login, forgotPassword, isAuthenticated, loadingAuth, authError } = useAuth()
+  const { login, forgotPassword, isAuthenticated, authError } = useAuth()
   const [form, setForm] = useState(initialForm)
   const [submitting, setSubmitting] = useState(false)
   const [resettingPassword, setResettingPassword] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
 
-  if (!loadingAuth && isAuthenticated) {
+  if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -77,6 +77,8 @@ function LoginPage() {
           <img
             src="/familiaNaTrip.png"
             alt="Familia na Trip"
+            loading="eager"
+            decoding="async"
             className="h-24 w-auto object-contain brightness-0 invert"
           />
           <h1 className="mt-6 text-5xl font-semibold tracking-tight">Sua base da viagem, agora pronta para desktop e celular.</h1>
@@ -91,6 +93,8 @@ function LoginPage() {
               <img
                 src="/familia.png"
                 alt="Familia na Trip"
+                loading="eager"
+                decoding="async"
                 className="mx-auto h-36 w-36 rounded-[24px] object-cover"
               />
             </div>

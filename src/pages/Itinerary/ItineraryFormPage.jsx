@@ -140,6 +140,8 @@ function ItineraryFormPage() {
             <img
               src={imageUrl}
               alt={editingItem?.title ?? 'Preview do roteiro'}
+              loading="lazy"
+              decoding="async"
               className="h-48 w-full rounded-[28px] object-cover"
             />
           ) : null}

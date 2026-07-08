@@ -5,15 +5,14 @@ import {
   FiCheckCircle,
   FiCalendar,
   FiCreditCard,
-  FiHeart,
   FiMapPin,
-  FiShield,
-  FiUpload,
+  FiPlus,
   FiUsers,
   FiX,
 } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import Avatar from '../../components/common/Avatar'
+import AppImage from '../../components/common/AppImage'
 import Badge from '../../components/common/Badge'
 import Button from '../../components/common/Button'
 import CatRatingBadge from '../../components/common/CatRatingBadge'
@@ -22,26 +21,18 @@ import EmptyState from '../../components/common/EmptyState'
 import Input from '../../components/common/Input'
 import useAgenda from '../../hooks/useAgenda'
 import useAgendaReviews from '../../hooks/useAgendaReviews'
-import useAlarms from '../../hooks/useAlarms'
 import useAuth from '../../hooks/useAuth'
 import useDiary from '../../hooks/useDiary'
 import useExpenses from '../../hooks/useExpenses'
-import useHotels from '../../hooks/useHotels'
 import useMembers from '../../hooks/useMembers'
 import useNotifications from '../../hooks/useNotifications'
-import usePolls from '../../hooks/usePolls'
-import useVehicles from '../../hooks/useVehicles'
 import { getCatRatingMeta } from '../../utils/catRating'
+import { compareEventChronology } from '../../utils/eventDefaults'
+import { canEditAnyContent, canManageMembers, canPromoteAdmins } from '../../utils/permissions'
 import {
-  canEditAnyContent,
-  canImportExpenses,
-  canManageMembers,
-  canPromoteAdmins,
-} from '../../utils/permissions'
-import {
+  formatDateInput,
   formatCurrency,
   formatDisplayDate,
-  formatDisplayDateShort,
   normalizeDisplayTime,
 } from '../../utils/formatters'
 
@@ -51,10 +42,57 @@ const shortcuts = [
   { to: '/diary', label: 'Diario', icon: FiBookOpen },
   { to: '/expenses', label: 'Gastos', icon: FiCreditCard },
   { to: '/members', label: 'Membros', icon: FiUsers },
-  { to: '/emergency', label: 'Emergencia', icon: FiHeart },
+  { to: '/emergency', label: 'Emergencia', icon: FiPlus, iconClassName: 'text-rose-600' },
 ]
 
 const TRIP_COUNTDOWN_TARGET = '2026-07-18T00:00:00-03:00'
+const TRIP_START_DATE = '2026-07-18'
+const FAMILY_SPLIT_COUNT = 5
+const dashboardTypeLabels = {
+  evento: 'Evento',
+  roteiro: 'Roteiro',
+  hotel: 'Hotel',
+  veiculo: 'Veiculo',
+  alarme: 'Alarme',
+  outro: 'Outro',
+}
+
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getEventDateTime(item) {
+  const date = formatDateInput(item?.date)
+
+  if (!date) {
+    return null
+  }
+
+  const time = normalizeDisplayTime(item?.startTime || '00:00') || '00:00'
+  const normalizedTime = time.length === 5 ? `${time}:00` : time
+  const parsed = new Date(`${date}T${normalizedTime}`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function normalizeCityName(value) {
+  const raw = String(value ?? '').trim()
+
+  if (!raw) {
+    return ''
+  }
+
+  const withoutPostalCode = raw.replace(/\b\d{5}-?\d{3}\b/g, ' ')
+  const [firstChunk] = withoutPostalCode
+    .replace(/\s+/g, ' ')
+    .split(/\s-\s|,|\/|\|/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+
+  return firstChunk ?? ''
+}
 
 function DashboardPage() {
   const navigate = useNavigate()
@@ -62,18 +100,11 @@ function DashboardPage() {
   const { members } = useMembers()
   const { entries } = useDiary()
   const { summary } = useExpenses()
-  const { hotels } = useHotels()
-  const { vehicles } = useVehicles()
   const { agenda, update: updateAgenda } = useAgenda()
   const { reviews, saveReview, toggleLike, addComment, deleteReview } = useAgendaReviews()
-  const { alarms } = useAlarms()
-  const { polls } = usePolls()
   const { notifications, unreadCount } = useNotifications()
   const displayName = userProfile?.name ?? currentUser?.displayName ?? currentUser?.email ?? 'viajante'
-  const nextEvent = agenda[0]
   const recentEntries = entries.slice(0, 2)
-  const activePolls = polls.filter((poll) => poll.active)
-  const activeAlarms = alarms.filter((alarm) => alarm.active)
   const totalBudget = Number(trip?.totalBudget ?? 0)
   const remainingBudget = totalBudget - summary.totalActual
   const heroImage = '/familia.png'
@@ -84,6 +115,7 @@ function DashboardPage() {
   const [planningNote, setPlanningNote] = useState('')
   const [planningSubmitting, setPlanningSubmitting] = useState(false)
   const [planningFeedback, setPlanningFeedback] = useState('')
+  const [planningEventId, setPlanningEventId] = useState('')
   const [selectedReviewId, setSelectedReviewId] = useState('')
   const [reviewCommentText, setReviewCommentText] = useState('')
   const [reviewFeedback, setReviewFeedback] = useState('')
@@ -94,6 +126,40 @@ function DashboardPage() {
   const canManageEventCosts = canEditAnyContent(userProfile)
   const canDeleteReviews = canPromoteAdmins(userProfile)
   const latestReviews = reviews.slice(0, 3)
+  const nowDate = useMemo(() => new Date(countdownNow), [countdownNow])
+  const todayString = useMemo(() => getLocalDateString(nowDate), [nowDate])
+  const planningEvent = useMemo(
+    () => agenda.find((item) => item.id === planningEventId) ?? null,
+    [agenda, planningEventId],
+  )
+  const splitExpensePerPerson = useMemo(
+    () => summary.totalActual / FAMILY_SPLIT_COUNT,
+    [summary.totalActual],
+  )
+  const visitedCitiesCount = useMemo(() => {
+    const citySet = new Set(
+      agenda
+        .filter((item) => {
+          const itemDate = formatDateInput(item.date)
+          return itemDate && itemDate <= todayString
+        })
+        .map((item) => normalizeCityName(item.city || item.location || item.local || item.address || item.mapQuery))
+        .filter(Boolean),
+    )
+
+    return citySet.size
+  }, [agenda, todayString])
+  const daysTogether = useMemo(() => {
+    const startDate = new Date(`${TRIP_START_DATE}T00:00:00-03:00`)
+    const currentDate = new Date(`${todayString}T00:00:00-03:00`)
+
+    if (currentDate.getTime() < startDate.getTime()) {
+      return 0
+    }
+
+    const diffInDays = Math.floor((currentDate.getTime() - startDate.getTime()) / 86_400_000)
+    return diffInDays + 1
+  }, [todayString])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -111,15 +177,64 @@ function DashboardPage() {
     setSelectedMemberId('')
   }
 
-  function openPlanningCard() {
-    if (!nextEvent) {
+  const { nextThreeEvents, completedToday } = useMemo(() => {
+    const sortedAgenda = [...agenda].sort(compareEventChronology)
+    const todayEvents = sortedAgenda.filter((item) => formatDateInput(item.date) === todayString)
+    const futureTodayEvents = todayEvents.filter((item) => {
+      const eventDateTime = getEventDateTime(item)
+      return !eventDateTime || eventDateTime.getTime() >= nowDate.getTime()
+    })
+
+    if (futureTodayEvents.length > 0) {
+      return {
+        nextThreeEvents: futureTodayEvents.slice(0, 3),
+        dashboardEmptyMessage: '',
+        completedToday: false,
+      }
+    }
+
+    if (todayEvents.length > 0) {
+      return {
+        nextThreeEvents: [],
+        dashboardEmptyMessage: 'Bom descanso, amanha tem mais!',
+        completedToday: true,
+      }
+    }
+
+    const futureEvents = sortedAgenda.filter((item) => {
+      const itemDate = formatDateInput(item.date)
+      return itemDate && itemDate >= todayString
+    })
+
+    if (futureEvents.length === 0) {
+      return {
+        nextThreeEvents: [],
+        dashboardEmptyMessage: '',
+        completedToday: false,
+      }
+    }
+
+    const referenceDate = formatDateInput(futureEvents[0].date)
+
+    return {
+      nextThreeEvents: futureEvents.filter((item) => formatDateInput(item.date) === referenceDate).slice(0, 3),
+      dashboardEmptyMessage: '',
+      completedToday: false,
+    }
+  }, [agenda, nowDate, todayString])
+
+  const nextEvent = nextThreeEvents[0] ?? null
+
+  function openPlanningCard(eventItem = nextEvent) {
+    if (!eventItem) {
       return
     }
 
+    setPlanningEventId(eventItem.id)
     setPlanningActualCost(
-      nextEvent.actualCost ? String(nextEvent.actualCost).replace('.', ',') : '',
+      eventItem.actualCost ? String(eventItem.actualCost).replace('.', ',') : '',
     )
-    setPlanningCatRating(Number(nextEvent.catRating ?? 0))
+    setPlanningCatRating(Number(eventItem.catRating ?? 0))
     setPlanningNote('')
     setPlanningFeedback('')
     setPlanningOpen(true)
@@ -128,6 +243,7 @@ function DashboardPage() {
   function closePlanningCard() {
     setPlanningOpen(false)
     setPlanningFeedback('')
+    setPlanningEventId('')
   }
 
   function getMemberBadgeTone(roleInTrip) {
@@ -141,21 +257,6 @@ function DashboardPage() {
 
     return 'neutral'
   }
-
-  const nextEventDateRange = useMemo(() => {
-    if (!nextEvent?.date) {
-      return 'Sem data definida'
-    }
-
-    const start = nextEvent.date
-    const end = trip?.endDate
-
-    if (!end || String(end) < String(start)) {
-      return formatDisplayDateShort(start)
-    }
-
-    return `${formatDisplayDateShort(start)} ate ${formatDisplayDateShort(end)}`
-  }, [nextEvent?.date, trip?.endDate])
 
   const planningCatsLabel =
     planningCatRating > 0
@@ -179,7 +280,7 @@ function DashboardPage() {
   }, [countdownNow])
 
   async function handlePlanningSave() {
-    if (!nextEvent || !canManageEventCosts) {
+    if (!planningEvent || !canManageEventCosts) {
       return
     }
 
@@ -193,12 +294,12 @@ function DashboardPage() {
           .replace(',', '.'),
       ) || 0
 
-      await updateAgenda(nextEvent.id, {
-        ...nextEvent,
+      await updateAgenda(planningEvent.id, {
+        ...planningEvent,
         actualCost: normalizedActualCost,
         catRating: planningCatRating,
       })
-      await saveReview(nextEvent, {
+      await saveReview(planningEvent, {
         actualCost: normalizedActualCost,
         rating: planningCatRating,
         note: planningNote.trim(),
@@ -263,29 +364,26 @@ function DashboardPage() {
         />
         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(236,254,255,0.78)_0%,rgba(248,250,252,0.68)_55%,rgba(255,255,255,0.56)_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(253,224,71,0.14),transparent_24%),radial-gradient(circle_at_bottom_left,rgba(251,146,60,0.10),transparent_26%)]" />
-        <div className="relative min-h-[220px] p-6 lg:min-h-[260px] lg:p-8">
-          <div className="max-w-2xl rounded-[28px] bg-white/40 p-4 shadow-[0_18px_40px_rgba(15,118,110,0.10)] backdrop-blur-[2px] lg:p-5">
+        <div className="relative min-h-[198px] p-3 sm:min-h-[220px] sm:p-6 lg:min-h-[260px] lg:p-8">
+          <div className="mx-auto w-full max-w-3xl rounded-[28px] bg-white/38 p-4 shadow-[0_18px_40px_rgba(15,118,110,0.10)] backdrop-blur-[2px] sm:p-5 lg:p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-950 drop-shadow-[0_1px_1px_rgba(255,255,255,0.35)]">
               Ola, {displayName}!
             </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-amber-800 drop-shadow-[0_1px_2px_rgba(255,255,255,0.32)] lg:text-3xl">
+            <h2 className="mt-2 max-w-[12ch] text-[2rem] font-semibold leading-[0.98] tracking-tight text-amber-800 drop-shadow-[0_1px_2px_rgba(255,255,255,0.32)] sm:max-w-none sm:text-2xl lg:text-3xl">
               Tudo pronto para a proxima parada?
             </h2>
-            <div className="summer-countdown summer-countdown__card mt-4 rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,247,214,0.92)_0%,rgba(255,250,233,0.84)_22%,rgba(240,253,250,0.78)_100%)] p-4 shadow-[0_18px_34px_rgba(245,158,11,0.16)]">
-              <div className="flex items-center justify-between gap-3">
+            <div className="summer-countdown summer-countdown__card mx-auto mt-4 w-full max-w-[29rem] rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,247,214,0.92)_0%,rgba(255,250,233,0.84)_22%,rgba(240,253,250,0.78)_100%)] p-4 shadow-[0_18px_34px_rgba(245,158,11,0.16)] sm:max-w-none sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">
                     Contagem para 18/07/2026
                   </p>
-                  <p className="mt-1 max-w-md text-sm text-slate-600">
-                    {tripCountdown.isStarted ? 'A viagem comecou.' : 'Nosso verao em familia esta chegando.'}
-                  </p>
                 </div>
-                <Badge tone="accent">
+                <Badge tone="accent" className="mx-auto w-fit sm:mx-0">
                   {tripCountdown.isStarted ? 'chegou o dia' : 'partiu viagem'}
                 </Badge>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
                 {[
                   { label: 'dias', value: tripCountdown.days },
                   { label: 'horas', value: tripCountdown.hours },
@@ -293,9 +391,9 @@ function DashboardPage() {
                 ].map((item) => (
                   <div
                     key={item.label}
-                    className="summer-countdown__tile rounded-[24px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.9)_0%,rgba(255,255,255,0.72)_100%)] px-3 py-4 text-center shadow-[0_14px_28px_rgba(15,23,42,0.08)] backdrop-blur-sm"
+                    className="summer-countdown__tile rounded-[24px] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.9)_0%,rgba(255,255,255,0.72)_100%)] px-2 py-4 text-center shadow-[0_14px_28px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:px-3"
                   >
-                    <p className="bg-[linear-gradient(180deg,#0f172a_0%,#0f766e_100%)] bg-clip-text text-3xl font-semibold tracking-tight text-transparent lg:text-4xl">
+                    <p className="bg-[linear-gradient(180deg,#0f172a_0%,#0f766e_100%)] bg-clip-text text-[2.2rem] font-semibold leading-none tracking-tight text-transparent lg:text-4xl">
                       {String(item.value).padStart(2, '0')}
                     </p>
                     <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
@@ -304,116 +402,81 @@ function DashboardPage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-amber-700/90">
-                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 shadow-[0_0_16px_rgba(251,191,36,0.85)]" />
-                Clima de viagem ativado
-              </div>
             </div>
           </div>
         </div>
       </Card>
 
-      {canPromoteAdmins(userProfile) || canImportExpenses(userProfile) ? (
-        <Card className="space-y-4 border border-teal-100 bg-[linear-gradient(135deg,#f0fdfa_0%,#ffffff_85%)]">
-          <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-600 text-white">
-              <FiShield size={20} />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-slate-950">Painel Superadmin</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Seus atalhos para importar a planilha oficial e gerenciar acessos do aplicativo.
-              </p>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {canImportExpenses(userProfile) ? (
-              <Link
-                to="/expenses/import"
-                className="rounded-3xl bg-white p-4 shadow-sm transition hover:bg-teal-50"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                  <FiUpload size={18} />
-                </div>
-                <p className="mt-3 font-semibold text-slate-900">Importar planilha</p>
-                <p className="mt-1 text-sm text-slate-500">Migrar agenda, custos estimados e orcamento.</p>
-              </Link>
-            ) : null}
-
-            <Link
-              to="/admin"
-              className="rounded-3xl bg-white p-4 shadow-sm transition hover:bg-teal-50"
-            >
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                <FiShield size={18} />
-              </div>
-              <p className="mt-3 font-semibold text-slate-900">Painel admin</p>
-              <p className="mt-1 text-sm text-slate-500">Exportar backup e acompanhar a operacao da viagem.</p>
-            </Link>
-
-            <Link
-              to="/members"
-              className="rounded-3xl bg-white p-4 shadow-sm transition hover:bg-teal-50"
-            >
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
-                <FiUsers size={18} />
-              </div>
-              <p className="mt-3 font-semibold text-slate-900">Gerenciar usuarios</p>
-              <p className="mt-1 text-sm text-slate-500">Organizar acessos, promover admins e acompanhar membros.</p>
-            </Link>
-          </div>
-        </Card>
-      ) : null}
-
       <Card>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-950">Proximo evento</h3>
+          <h3 className="text-lg font-semibold text-slate-950">Proximos eventos</h3>
           <Link to="/agenda" className="text-sm font-semibold text-teal-700">Ver agenda</Link>
         </div>
-        {nextEvent ? (
-          <button
-            type="button"
-            onClick={openPlanningCard}
-            className="mt-4 block w-full overflow-hidden rounded-[28px] border border-slate-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div
-              className="h-40 bg-cover bg-center p-4 text-white"
-              style={{
-                backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.6)), url(${
-                  nextEvent.image || trip?.coverImage || trip?.cover || '/familia.png'
-                })`,
-              }}
-            >
-              <Badge tone="success">{nextEventDateRange}</Badge>
-              <div className="mt-10">
-                <p className="text-sm text-white/80">Proxima parada</p>
-                <h4 className="text-2xl font-semibold">{nextEvent.title}</h4>
-                <p className="text-sm text-white/80">{formatDisplayDate(nextEvent.date)}</p>
-              </div>
-            </div>
-            <div className="space-y-3 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm text-slate-500">{nextEvent.city || nextEvent.location || 'Local da viagem'}</p>
+        <p className="mt-2 text-sm text-slate-500">
+          A fila vem da agenda oficial da viagem, incluindo eventos, roteiro, hotel e veiculo quando eles entram no planejamento do dia.
+        </p>
+        {nextThreeEvents.length > 0 ? (
+          <div className="mt-4 space-y-3">
+            {nextThreeEvents.map((eventItem, index) => (
+              <button
+                key={eventItem.id}
+                type="button"
+                onClick={() => openPlanningCard(eventItem)}
+                className="block w-full overflow-hidden rounded-[28px] border border-slate-100 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div
+                  className="h-40 bg-cover bg-center p-4 text-white"
+                  style={{
+                    backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.12), rgba(15,23,42,0.6)), url(${
+                      eventItem.image || trip?.coverImage || trip?.cover || '/familia.png'
+                    })`,
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <Badge tone={index === 0 ? 'success' : 'accent'}>
+                      {index === 0 ? 'agora na fila' : `${index + 1} da fila`}
+                    </Badge>
+                    <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-700">
+                      {dashboardTypeLabels[eventItem.type] ?? eventItem.type ?? 'Evento'}
+                    </span>
+                  </div>
+                  <div className="mt-10">
+                    <p className="text-sm text-white/80">
+                      {index === 0 ? 'Proxima parada' : 'Depois vem'}
+                    </p>
+                    <h4 className="text-2xl font-semibold">{eventItem.title}</h4>
+                    <p className="text-sm text-white/80">
+                      {formatDisplayDate(eventItem.date)}
+                      {eventItem.startTime ? ` - ${normalizeDisplayTime(eventItem.startTime)}` : ''}
+                    </p>
+                  </div>
                 </div>
-                <Badge tone="accent">
-                  {nextEvent.actualCost > 0 ? 'concluido' : 'planejado'}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                {nextEvent.estimatedCost > 0 ? (
-                  <span>Estimado: {formatCurrency(nextEvent.estimatedCost)}</span>
-                ) : null}
-                {nextEvent.actualCost > 0 ? (
-                  <span className="font-medium text-teal-700">Gasto: {formatCurrency(nextEvent.actualCost)}</span>
-                ) : null}
-                {nextEvent.catRating > 0 ? <CatRatingBadge rating={nextEvent.catRating} compact /> : null}
-              </div>
-              <p className="text-sm text-teal-700">
-                {canManageEventCosts ? 'Toque para avaliar e concluir o gasto' : 'Toque para ver o planejamento'}
-              </p>
-            </div>
-          </button>
+                <div className="space-y-3 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-slate-500">{eventItem.city || eventItem.location || 'Local da viagem'}</p>
+                    </div>
+                    <Badge tone="accent">
+                      {eventItem.actualCost > 0 ? 'concluido' : 'planejado'}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                    {eventItem.estimatedCost > 0 ? (
+                      <span>Estimado: {formatCurrency(eventItem.estimatedCost)}</span>
+                    ) : null}
+                    {eventItem.actualCost > 0 ? (
+                      <span className="font-medium text-teal-700">Gasto: {formatCurrency(eventItem.actualCost)}</span>
+                    ) : null}
+                    {eventItem.catRating > 0 ? <CatRatingBadge rating={eventItem.catRating} compact /> : null}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : completedToday ? (
+          <div className="mt-4">
+            <EmptyState title="Bom descanso, amanha tem mais!" description="A programacao de hoje ja foi concluida." />
+          </div>
         ) : (
           <div className="mt-4"><EmptyState title="Sem proximo evento" description="Crie itens na agenda para acompanhar a viagem." /></div>
         )}
@@ -427,9 +490,9 @@ function DashboardPage() {
           </Link>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {shortcuts.map(({ to, label, icon: Icon }) => (
+          {shortcuts.map(({ to, label, icon: Icon, iconClassName = 'text-teal-700' }) => (
             <Link key={to} to={to} className="rounded-3xl bg-slate-50 p-4 text-center transition hover:bg-teal-50">
-              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-teal-700 shadow-sm">
+              <div className={`mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm ${iconClassName}`}>
                 <Icon size={18} />
               </div>
               <p className="mt-3 text-sm font-medium text-slate-700">{label}</p>
@@ -507,16 +570,16 @@ function DashboardPage() {
           </p>
         </Card>
         <Card>
-          <p className="text-sm text-slate-500">Reservas ativas</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{hotels.length + vehicles.length}</p>
+          <p className="text-sm text-slate-500">Despesa individual</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950">{formatCurrency(splitExpensePerPerson)}</p>
         </Card>
         <Card>
-          <p className="text-sm text-slate-500">Alarmes ativos</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{activeAlarms.length}</p>
+          <p className="text-sm text-slate-500">Cidades visitadas</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950">{visitedCitiesCount}</p>
         </Card>
         <Card>
-          <p className="text-sm text-slate-500">Enquetes abertas</p>
-          <p className="mt-2 text-xl font-semibold text-slate-950">{activePolls.length}</p>
+          <p className="text-sm text-slate-500">Dias juntos</p>
+          <p className="mt-2 text-xl font-semibold text-slate-950">{daysTogether}</p>
         </Card>
       </div>
 
@@ -568,10 +631,12 @@ function DashboardPage() {
         <div className="mt-4 space-y-4">
           {recentEntries.map((entry) => (
             <div key={entry.id} className="flex gap-3 rounded-3xl bg-slate-50 p-3">
-              <img
+              <AppImage
                 src={entry.photos?.[0]?.url ?? entry.image}
                 alt={entry.title}
                 className="h-16 w-16 rounded-2xl object-cover"
+                fallbackClassName="h-16 w-16 rounded-2xl"
+                fallbackLabel="Foto"
               />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{formatDisplayDate(entry.date)}</p>
@@ -671,7 +736,7 @@ function DashboardPage() {
         </div>
       ) : null}
 
-      {planningOpen && nextEvent ? (
+      {planningOpen && planningEvent ? (
         <div className="fixed inset-0 z-40 flex items-end bg-slate-950/35 p-4 backdrop-blur-[2px] lg:items-center lg:justify-center">
           <button
             type="button"
@@ -686,9 +751,10 @@ function DashboardPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
                     Planejamento
                   </p>
-                  <h3 className="mt-2 text-xl font-semibold text-slate-950">{nextEvent.title}</h3>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-950">{planningEvent.title}</h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    {formatDisplayDate(nextEvent.date)}{nextEvent.startTime ? ` - ${normalizeDisplayTime(nextEvent.startTime)}` : ''}
+                    {formatDisplayDate(planningEvent.date)}
+                    {planningEvent.startTime ? ` - ${normalizeDisplayTime(planningEvent.startTime)}` : ''}
                   </p>
                 </div>
                 <button
@@ -704,15 +770,15 @@ function DashboardPage() {
               <div className="rounded-3xl bg-slate-50 p-4">
                 <p className="text-sm text-slate-500">Planejado para este evento</p>
                 <p className="mt-1 font-semibold text-slate-950">
-                  {nextEvent.description || nextEvent.local || 'Sem detalhes adicionais'}
+                  {planningEvent.description || planningEvent.local || 'Sem detalhes adicionais'}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                  <span>{nextEvent.city || nextEvent.location || 'Sem local'}</span>
-                  {nextEvent.estimatedCost > 0 ? (
-                    <span>Estimado: {formatCurrency(nextEvent.estimatedCost)}</span>
+                  <span>{planningEvent.city || planningEvent.location || 'Sem local'}</span>
+                  {planningEvent.estimatedCost > 0 ? (
+                    <span>Estimado: {formatCurrency(planningEvent.estimatedCost)}</span>
                   ) : null}
-                  {nextEvent.actualCost > 0 ? (
-                    <span className="font-medium text-teal-700">Gasto: {formatCurrency(nextEvent.actualCost)}</span>
+                  {planningEvent.actualCost > 0 ? (
+                    <span className="font-medium text-teal-700">Gasto: {formatCurrency(planningEvent.actualCost)}</span>
                   ) : null}
                 </div>
               </div>
@@ -786,20 +852,20 @@ function DashboardPage() {
                 ) : null}
               </div>
 
-              {nextEvent.estimatedCost > 0 || nextEvent.actualCost > 0 || nextEvent.catRating > 0 ? (
+              {planningEvent.estimatedCost > 0 || planningEvent.actualCost > 0 || planningEvent.catRating > 0 ? (
                 <div className="rounded-3xl bg-[linear-gradient(135deg,#f0fdfa_0%,#ffffff_100%)] p-4">
                   <div className="flex items-center gap-2 text-teal-700">
                     <FiCheckCircle size={16} />
                     <p className="text-sm font-semibold">
-                      {nextEvent.actualCost > 0 ? 'Evento concluido' : 'Resumo do planejamento'}
+                      {planningEvent.actualCost > 0 ? 'Evento concluido' : 'Resumo do planejamento'}
                     </p>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                    {nextEvent.estimatedCost > 0 ? (
-                      <span>Estimado: {formatCurrency(nextEvent.estimatedCost)}</span>
+                    {planningEvent.estimatedCost > 0 ? (
+                      <span>Estimado: {formatCurrency(planningEvent.estimatedCost)}</span>
                     ) : null}
-                    {nextEvent.actualCost > 0 ? <span>Gasto: {formatCurrency(nextEvent.actualCost)}</span> : null}
-                    {nextEvent.catRating > 0 ? <CatRatingBadge rating={nextEvent.catRating} compact /> : null}
+                    {planningEvent.actualCost > 0 ? <span>Gasto: {formatCurrency(planningEvent.actualCost)}</span> : null}
+                    {planningEvent.catRating > 0 ? <CatRatingBadge rating={planningEvent.catRating} compact /> : null}
                   </div>
                 </div>
               ) : null}

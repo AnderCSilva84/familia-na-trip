@@ -27,6 +27,7 @@ function ExpenseFormPage() {
   const { expenses, loading, error, createExpense, updateExpense, usingMockData } = useExpenses()
   const { members } = useMembers()
   const [selectedMembers, setSelectedMembers] = useState(null)
+  const [selectedType, setSelectedType] = useState(editingExpense?.type ?? 'efetivado')
   const [feedback, setFeedback] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const editingExpense = expenses.find((expense) => expense.id === expenseId)
@@ -54,6 +55,7 @@ function ExpenseFormPage() {
         category: String(formData.get('category') ?? 'Outros'),
         type: String(formData.get('type') ?? 'efetivado'),
         value: Number(formData.get('value') ?? 0),
+        settled: formData.get('settled') === 'on',
         paidBy: String(formData.get('paidBy') ?? ''),
         dividedBetween,
         date: String(formData.get('date') ?? ''),
@@ -128,7 +130,8 @@ function ExpenseFormPage() {
               <span>Tipo</span>
               <select
                 name="type"
-                defaultValue={editingExpense?.type ?? 'efetivado'}
+                value={selectedType}
+                onChange={(event) => setSelectedType(event.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
               >
                 <option value="estimado">estimado</option>
@@ -155,6 +158,19 @@ function ExpenseFormPage() {
               required
             />
           </div>
+
+          <label className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              name="settled"
+              defaultChecked={editingExpense?.relatedAgendaId ? true : editingExpense?.settled === true}
+              disabled={selectedType === 'estimado'}
+            />
+            Marcar como baixa confirmada no aplicativo
+          </label>
+          <p className="text-sm text-slate-500">
+            Apenas gastos com baixa confirmada entram no consolidado de gastos efetivados do dashboard.
+          </p>
 
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
             <span>Pago por</span>

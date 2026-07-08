@@ -16,6 +16,7 @@ import { db, ensureFirebaseConfigured, storage } from '../firebase/config'
 import { compareEventChronology, getDefaultEventImage } from '../utils/eventDefaults'
 import { normalizeDisplayTime } from '../utils/formatters'
 import { resolveMapMetadata } from '../utils/locationPresets'
+import { deleteAlarmByAgendaEventId, syncAlarmFromAgendaEvent } from './alarmService'
 import { createNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 import { deleteAgendaActualExpense, syncAgendaActualExpense } from './expenseService'
@@ -118,6 +119,10 @@ function mapAgendaItem(id, data) {
     latitude: Number(data.latitude ?? '') || '',
     longitude: Number(data.longitude ?? '') || '',
     type: data.type ?? 'outro',
+    notifyMembers: data.notifyMembers ?? false,
+    membersToNotify: data.membersToNotify ?? [],
+    alarmTime: data.alarmTime ?? '',
+    alarmId: data.alarmId ?? '',
     relatedId: data.relatedId ?? '',
     importSource: data.importSource ?? '',
     importSheetName: data.importSheetName ?? '',
@@ -184,6 +189,10 @@ export async function createAgendaEvent(data, imageFile = null) {
     latitude: locationData.latitude,
     longitude: locationData.longitude,
     type: eventData.type ?? 'evento',
+    notifyMembers: eventData.notifyMembers ?? false,
+    membersToNotify: eventData.membersToNotify ?? [],
+    alarmTime: eventData.alarmTime ?? '',
+    alarmId: eventData.alarmId ?? '',
     relatedId: eventData.relatedId ?? '',
     createdBy: eventData.createdBy,
     createdAt: serverTimestamp(),
@@ -203,6 +212,20 @@ export async function createAgendaEvent(data, imageFile = null) {
 
     payload.image = uploadedImage.image
     payload.imagePath = uploadedImage.imagePath
+  }
+
+  if (payload.type === 'alarme') {
+    const alarmId = await syncAlarmFromAgendaEvent({
+      ...payload,
+      id: eventRef.id,
+    })
+
+    await updateDoc(eventRef, {
+      alarmId,
+      updatedAt: serverTimestamp(),
+    })
+
+    payload.alarmId = alarmId
   }
 
   if (shouldNotify) {
@@ -262,6 +285,8 @@ export function subscribeAgendaByTrip(tripId, callback, onError) {
 
 export async function updateAgendaEvent(id, data) {
   const eventRef = doc(agendaCollection(), id)
+  const currentSnapshot = await getDoc(eventRef)
+  const currentData = currentSnapshot.exists() ? currentSnapshot.data() : {}
   const imageFile = data.imageFile ?? null
   const currentImagePath = data.currentImagePath ?? ''
   const payload = { ...data }
@@ -293,6 +318,19 @@ export async function updateAgendaEvent(id, data) {
     createdBy: payload.createdBy,
   })
 
+  let alarmId = currentData.alarmId ?? payload.alarmId ?? ''
+
+  if (payload.type === 'alarme') {
+    alarmId = await syncAlarmFromAgendaEvent({
+      ...currentData,
+      ...payload,
+      id,
+    })
+  } else if (currentData.type === 'alarme' || currentData.alarmId) {
+    await deleteAlarmByAgendaEventId(id)
+    alarmId = ''
+  }
+
   await updateDoc(eventRef, {
     ...payload,
     mapX: locationData.mapX,
@@ -300,6 +338,7 @@ export async function updateAgendaEvent(id, data) {
     mapQuery: locationData.mapQuery,
     latitude: locationData.latitude,
     longitude: locationData.longitude,
+    alarmId,
     actualExpenseId,
     updatedAt: serverTimestamp(),
   })
@@ -317,6 +356,7 @@ export async function deleteAgendaEvent(id) {
     }
   }
 
+  await deleteAlarmByAgendaEventId(id)
   await deleteAgendaActualExpense(id)
   await deleteDoc(eventRef)
 }

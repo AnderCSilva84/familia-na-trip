@@ -2,16 +2,20 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
+import { resolveMapMetadata } from '../utils/locationPresets'
 import { createAgendaEvent } from './agendaService'
 import { createNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
+import { geocodeLocation } from './geocodeService'
 
 function hotelsCollection() {
   ensureFirebaseConfigured()
@@ -19,6 +23,8 @@ function hotelsCollection() {
 }
 
 function mapHotel(id, data) {
+  const mapMetadata = resolveMapMetadata(data)
+
   return {
     id,
     tripId: data.tripId ?? '',
@@ -31,8 +37,11 @@ function mapHotel(id, data) {
     finalValue: Number(data.finalValue ?? 0),
     link: data.link ?? '',
     image: data.image ?? '',
-    mapX: data.mapX ?? '',
-    mapY: data.mapY ?? '',
+    mapX: data.mapX ?? mapMetadata.mapX ?? '',
+    mapY: data.mapY ?? mapMetadata.mapY ?? '',
+    mapQuery: data.mapQuery ?? mapMetadata.mapQuery ?? '',
+    latitude: Number(data.latitude ?? '') || '',
+    longitude: Number(data.longitude ?? '') || '',
     status: data.status ?? 'pesquisando',
     notes: data.notes ?? '',
     createdBy: data.createdBy ?? '',
@@ -41,8 +50,27 @@ function mapHotel(id, data) {
   }
 }
 
+async function enrichHotelLocationData(data) {
+  const mapMetadata = resolveMapMetadata(data)
+  const geocoded = await geocodeLocation({
+    ...data,
+    location: data.location ?? data.address ?? data.hotelName ?? '',
+    local: data.local ?? data.hotelName ?? '',
+    city: data.city ?? '',
+  })
+
+  return {
+    mapX: data.mapX ?? mapMetadata.mapX ?? '',
+    mapY: data.mapY ?? mapMetadata.mapY ?? '',
+    mapQuery: geocoded.mapQuery || data.mapQuery || mapMetadata.mapQuery || '',
+    latitude: geocoded.latitude,
+    longitude: geocoded.longitude,
+  }
+}
+
 export async function createHotelReservation(data) {
   const hotelRef = doc(hotelsCollection())
+  const locationData = await enrichHotelLocationData(data)
   const payload = {
     id: hotelRef.id,
     tripId: data.tripId,
@@ -55,8 +83,11 @@ export async function createHotelReservation(data) {
     finalValue: Number(data.finalValue ?? 0),
     link: data.link ?? '',
     image: data.image ?? '',
-    mapX: data.mapX ?? '',
-    mapY: data.mapY ?? '',
+    mapX: locationData.mapX,
+    mapY: locationData.mapY,
+    mapQuery: locationData.mapQuery,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
     status: data.status ?? 'pesquisando',
     notes: data.notes ?? '',
     createdBy: data.createdBy,
@@ -136,10 +167,16 @@ export function subscribeHotelsByTrip(tripId, callback, onError) {
 
 export async function updateHotelReservation(id, data) {
   const hotelRef = doc(hotelsCollection(), id)
+  const locationData = await enrichHotelLocationData(data)
   await updateDoc(hotelRef, {
     ...data,
     estimatedValue: Number(data.estimatedValue ?? 0),
     finalValue: Number(data.finalValue ?? 0),
+    mapX: locationData.mapX,
+    mapY: locationData.mapY,
+    mapQuery: locationData.mapQuery,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
     updatedAt: serverTimestamp(),
   })
 }
@@ -147,4 +184,46 @@ export async function updateHotelReservation(id, data) {
 export async function deleteHotelReservation(id) {
   const hotelRef = doc(hotelsCollection(), id)
   await deleteDoc(hotelRef)
+}
+
+export async function normalizeHotelLocationsForTrip(tripId) {
+  ensureFirebaseConfigured()
+
+  if (!tripId) {
+    return 0
+  }
+
+  const snapshot = await getDocs(query(hotelsCollection(), where('tripId', '==', tripId)))
+  const updates = await Promise.all(
+    snapshot.docs.map(async (hotelDoc) => {
+      const data = hotelDoc.data()
+      const locationData = await enrichHotelLocationData(data)
+
+      return {
+        ref: hotelDoc.ref,
+        payload: {
+          mapX: locationData.mapX,
+          mapY: locationData.mapY,
+          mapQuery: locationData.mapQuery,
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          updatedAt: serverTimestamp(),
+        },
+      }
+    }),
+  )
+
+  if (!updates.length) {
+    return 0
+  }
+
+  for (let index = 0; index < updates.length; index += 400) {
+    const batch = writeBatch(db)
+    updates.slice(index, index + 400).forEach((item) => {
+      batch.update(item.ref, item.payload)
+    })
+    await batch.commit()
+  }
+
+  return updates.length
 }

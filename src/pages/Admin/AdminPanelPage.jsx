@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FiDownload, FiUpload, FiUsers } from 'react-icons/fi'
+import { FiDownload, FiUsers } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -55,14 +55,11 @@ function AdminPanelPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Operacao central</p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Painel Admin</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Gerencie acessos, acompanhe membros conectados e mantenha um backup da viagem em planilha.
+            Gerencie acessos, acompanhe membros conectados e mantenha um backup da viagem.
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Button icon={<FiUpload />} onClick={() => navigate('/expenses/import')}>
-            Importar planilha
-          </Button>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Button variant="secondary" icon={<FiDownload />} disabled={exporting} onClick={handleExport}>
             {exporting ? 'Exportando...' : 'Exportar backup'}
           </Button>

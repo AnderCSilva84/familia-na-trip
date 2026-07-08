@@ -2,16 +2,20 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
+import { resolveMapMetadata } from '../utils/locationPresets'
 import { createAgendaEvent } from './agendaService'
 import { createNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
+import { geocodeLocation } from './geocodeService'
 
 function vehiclesCollection() {
   ensureFirebaseConfigured()
@@ -19,6 +23,8 @@ function vehiclesCollection() {
 }
 
 function mapVehicle(id, data) {
+  const mapMetadata = resolveMapMetadata(data)
+
   return {
     id,
     tripId: data.tripId ?? '',
@@ -33,8 +39,11 @@ function mapVehicle(id, data) {
     finalValue: Number(data.finalValue ?? 0),
     link: data.link ?? '',
     image: data.image ?? '',
-    mapX: data.mapX ?? '',
-    mapY: data.mapY ?? '',
+    mapX: data.mapX ?? mapMetadata.mapX ?? '',
+    mapY: data.mapY ?? mapMetadata.mapY ?? '',
+    mapQuery: data.mapQuery ?? mapMetadata.mapQuery ?? '',
+    latitude: Number(data.latitude ?? '') || '',
+    longitude: Number(data.longitude ?? '') || '',
     status: data.status ?? 'pesquisando',
     notes: data.notes ?? '',
     createdBy: data.createdBy ?? '',
@@ -43,8 +52,28 @@ function mapVehicle(id, data) {
   }
 }
 
+async function enrichVehicleLocationData(data) {
+  const mapMetadata = resolveMapMetadata(data)
+  const geocoded = await geocodeLocation({
+    ...data,
+    address: data.address ?? data.pickupLocation ?? data.returnLocation ?? '',
+    location: data.location ?? data.pickupLocation ?? data.returnLocation ?? '',
+    local: data.local ?? data.vehicleModel ?? data.rentalCompany ?? '',
+    city: data.city ?? '',
+  })
+
+  return {
+    mapX: data.mapX ?? mapMetadata.mapX ?? '',
+    mapY: data.mapY ?? mapMetadata.mapY ?? '',
+    mapQuery: geocoded.mapQuery || data.mapQuery || mapMetadata.mapQuery || '',
+    latitude: geocoded.latitude,
+    longitude: geocoded.longitude,
+  }
+}
+
 export async function createVehicleRental(data) {
   const vehicleRef = doc(vehiclesCollection())
+  const locationData = await enrichVehicleLocationData(data)
   const payload = {
     id: vehicleRef.id,
     tripId: data.tripId,
@@ -59,8 +88,11 @@ export async function createVehicleRental(data) {
     finalValue: Number(data.finalValue ?? 0),
     link: data.link ?? '',
     image: data.image ?? '',
-    mapX: data.mapX ?? '',
-    mapY: data.mapY ?? '',
+    mapX: locationData.mapX,
+    mapY: locationData.mapY,
+    mapQuery: locationData.mapQuery,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
     status: data.status ?? 'pesquisando',
     notes: data.notes ?? '',
     createdBy: data.createdBy,
@@ -140,10 +172,16 @@ export function subscribeVehiclesByTrip(tripId, callback, onError) {
 
 export async function updateVehicleRental(id, data) {
   const vehicleRef = doc(vehiclesCollection(), id)
+  const locationData = await enrichVehicleLocationData(data)
   await updateDoc(vehicleRef, {
     ...data,
     estimatedValue: Number(data.estimatedValue ?? 0),
     finalValue: Number(data.finalValue ?? 0),
+    mapX: locationData.mapX,
+    mapY: locationData.mapY,
+    mapQuery: locationData.mapQuery,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
     updatedAt: serverTimestamp(),
   })
 }
@@ -151,4 +189,46 @@ export async function updateVehicleRental(id, data) {
 export async function deleteVehicleRental(id) {
   const vehicleRef = doc(vehiclesCollection(), id)
   await deleteDoc(vehicleRef)
+}
+
+export async function normalizeVehicleLocationsForTrip(tripId) {
+  ensureFirebaseConfigured()
+
+  if (!tripId) {
+    return 0
+  }
+
+  const snapshot = await getDocs(query(vehiclesCollection(), where('tripId', '==', tripId)))
+  const updates = await Promise.all(
+    snapshot.docs.map(async (vehicleDoc) => {
+      const data = vehicleDoc.data()
+      const locationData = await enrichVehicleLocationData(data)
+
+      return {
+        ref: vehicleDoc.ref,
+        payload: {
+          mapX: locationData.mapX,
+          mapY: locationData.mapY,
+          mapQuery: locationData.mapQuery,
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          updatedAt: serverTimestamp(),
+        },
+      }
+    }),
+  )
+
+  if (!updates.length) {
+    return 0
+  }
+
+  for (let index = 0; index < updates.length; index += 400) {
+    const batch = writeBatch(db)
+    updates.slice(index, index + 400).forEach((item) => {
+      batch.update(item.ref, item.payload)
+    })
+    await batch.commit()
+  }
+
+  return updates.length
 }

@@ -3,9 +3,9 @@ import useAuth from '../../hooks/useAuth'
 import Button from '../../components/common/Button'
 
 function WelcomePage() {
-  const { isAuthenticated, loadingAuth } = useAuth()
+  const { isAuthenticated } = useAuth()
 
-  if (!loadingAuth && isAuthenticated) {
+  if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />
   }
 
@@ -29,6 +29,8 @@ function WelcomePage() {
                 <img
                   src="/familia.png"
                   alt="Familia na Trip"
+                  loading="eager"
+                  decoding="async"
                   className="h-[9.5rem] w-[9.5rem] object-cover"
                 />
               </div>

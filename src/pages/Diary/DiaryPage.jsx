@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../../components/common/Button'
+import AppImage from '../../components/common/AppImage'
 import EmptyState from '../../components/common/EmptyState'
 import Loading from '../../components/common/Loading'
 import DiaryCard from '../../components/cards/DiaryCard'
@@ -109,7 +110,13 @@ function DiaryPage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {group.items.map((photo) => (
                   <div key={photo.id} className="overflow-hidden rounded-[28px] bg-slate-50">
-                    <img src={photo.image} alt={photo.title} className="h-36 w-full object-cover" />
+                    <AppImage
+                      src={photo.image}
+                      alt={photo.title}
+                      className="h-36 w-full object-cover"
+                      fallbackClassName="h-36 w-full"
+                      fallbackLabel="Foto"
+                    />
                     <div className="p-3">
                       <p className="truncate text-sm font-semibold text-slate-900">{photo.title}</p>
                     </div>

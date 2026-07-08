@@ -8,10 +8,12 @@ import Loading from '../../components/common/Loading'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useAgenda from '../../hooks/useAgenda'
 import useAuth from '../../hooks/useAuth'
+import useHotels from '../../hooks/useHotels'
 import useItinerary from '../../hooks/useItinerary'
 import useTips from '../../hooks/useTips'
 import useImportLogs from '../../hooks/useImportLogs'
 import useAppStore from '../../store/useAppStore'
+import useVehicles from '../../hooks/useVehicles'
 import useExpenses from '../../hooks/useExpenses'
 import {
   clearImportedAgendaByTrip,
@@ -24,8 +26,10 @@ import { parseExpenseSpreadsheet } from '../../services/expenseImportService'
 import { clearImportedExpensesByTrip, normalizeImportedExpenseValuesByTrip } from '../../services/expenseService'
 import { createImportLog, uploadImportSpreadsheet } from '../../services/importLogService'
 import { normalizeItineraryLocationsForTrip } from '../../services/itineraryService'
+import { normalizeHotelLocationsForTrip } from '../../services/hotelService'
 import { clearImportedTipsByTrip, importTipsBatch } from '../../services/tipService'
 import { updateTrip } from '../../services/tripService'
+import { normalizeVehicleLocationsForTrip } from '../../services/vehicleService'
 import { formatCurrency, normalizeDisplayTime } from '../../utils/formatters'
 import { canImportExpenses } from '../../utils/permissions'
 
@@ -70,8 +74,10 @@ function ExpenseImportPage() {
   const setTrip = useAppStore((state) => state.setTrip)
   const { importExpenses, loading, usingMockData, refreshExpenses } = useExpenses()
   const { refresh: refreshAgenda } = useAgenda()
+  const { refresh: refreshHotels } = useHotels()
   const { refreshItems: refreshItinerary } = useItinerary()
   const { refresh: refreshTips } = useTips()
+  const { refresh: refreshVehicles } = useVehicles()
   const { logs, latestLog, error: logsError, deleteLog } = useImportLogs()
   const [feedback, setFeedback] = useState('')
   const [replaceExisting, setReplaceExisting] = useState(true)
@@ -352,21 +358,23 @@ function ExpenseImportPage() {
 
     setMaintenanceLoading(true)
     setFeedback('')
-    setImportStep('Recalculando localizacoes da agenda e do roteiro...')
+    setImportStep('Recalculando localizacoes da agenda, roteiro, hospedagens e veiculos...')
 
     try {
-      const [agendaCount, itineraryCount] = await Promise.all([
+      const [agendaCount, itineraryCount, hotelCount, vehicleCount] = await Promise.all([
         normalizeAgendaLocationsForTrip(trip.id),
         normalizeItineraryLocationsForTrip(trip.id),
+        normalizeHotelLocationsForTrip(trip.id),
+        normalizeVehicleLocationsForTrip(trip.id),
       ])
 
-      await Promise.all([refreshAgenda(), refreshItinerary()])
+      await Promise.all([refreshAgenda(), refreshItinerary(), refreshHotels(), refreshVehicles()])
 
-      const totalUpdated = agendaCount + itineraryCount
+      const totalUpdated = agendaCount + itineraryCount + hotelCount + vehicleCount
 
       setFeedback(
         totalUpdated > 0
-          ? `${agendaCount} evento(s) da agenda e ${itineraryCount} item(ns) do roteiro tiveram a localizacao recalculada no Firestore.`
+          ? `${agendaCount} evento(s) da agenda, ${itineraryCount} item(ns) do roteiro, ${hotelCount} hospedagem(ns) e ${vehicleCount} veiculo(s) tiveram a localizacao recalculada no Firestore.`
           : 'Nenhum registro precisou de recalculo de localizacao.',
       )
     } catch (error) {
@@ -570,7 +578,7 @@ function ExpenseImportPage() {
               onClick={handleRecalculateLocations}
               disabled={maintenanceLoading || usingMockData}
             >
-              {maintenanceLoading ? 'Recalculando...' : 'Recalcular localizacoes'}
+              {maintenanceLoading ? 'Recalculando...' : 'Recalcular localizacoes do mapa'}
             </Button>
           </div>
         ) : null}

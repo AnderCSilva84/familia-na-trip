@@ -130,6 +130,8 @@ function NewDiaryEntryPage() {
                   key={photo.url}
                   src={photo.url}
                   alt={editingEntry.title}
+                  loading="lazy"
+                  decoding="async"
                   className="aspect-square rounded-2xl object-cover"
                 />
               ))}

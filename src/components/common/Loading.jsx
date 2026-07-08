@@ -5,6 +5,8 @@ function Loading() {
         <img
           src="/familiaNaTrip.png"
           alt="Familia na Trip"
+          loading="eager"
+          decoding="async"
           className="h-20 w-auto animate-pulse object-contain"
         />
       </div>

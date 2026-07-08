@@ -15,6 +15,8 @@ function Header({ title, subtitle }) {
           <img
             src="/familiaNaTrip.png"
             alt="Familia na Trip"
+            loading="eager"
+            decoding="async"
             className="h-16 w-auto object-contain"
           />
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 lg:text-3xl">{title}</h1>

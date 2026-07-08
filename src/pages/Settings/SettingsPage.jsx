@@ -4,16 +4,20 @@ import Avatar from '../../components/common/Avatar'
 import Card from '../../components/common/Card'
 import Input from '../../components/common/Input'
 import StatusMessage from '../../components/feedback/StatusMessage'
+import useAlarms from '../../hooks/useAlarms'
 import useAuth from '../../hooks/useAuth'
+import useNotifications from '../../hooks/useNotifications'
 import { changeCurrentUserPassword, syncCurrentAuthProfile } from '../../services/authService'
 import { syncMemberProfile } from '../../services/memberService'
 import { updateTrip } from '../../services/tripService'
 import { updateUserProfile, uploadUserProfilePhoto } from '../../services/userService'
 import useAppStore from '../../store/useAppStore'
 import { Link } from 'react-router-dom'
-import { canImportExpenses, canPromoteAdmins, getUserRoleLabel } from '../../utils/permissions'
+import { canPromoteAdmins, getUserRoleLabel } from '../../utils/permissions'
 function SettingsPage() {
   const { currentUser, userProfile, trip, logout } = useAuth()
+  const { alarms } = useAlarms()
+  const { unreadCount } = useNotifications()
   const setUserProfile = useAppStore((state) => state.setUserProfile)
   const setTrip = useAppStore((state) => state.setTrip)
   const [feedback, setFeedback] = useState('')
@@ -28,6 +32,15 @@ function SettingsPage() {
   const displayName = userProfile?.name ?? currentUser?.displayName ?? 'Usuario'
   const resolvedAvatar = selectedPhoto ? photoPreview : avatarSource
   const resolvedRole = getUserRoleLabel(userProfile)
+  const todayString = new Date().toISOString().slice(0, 10)
+  const pendingAlarmCount = alarms.filter((alarm) => {
+    if (!alarm?.active) {
+      return false
+    }
+
+    const alarmDate = String(alarm.date ?? '').slice(0, 10)
+    return !alarmDate || alarmDate >= todayString
+  }).length
 
   useEffect(() => {
     return () => {
@@ -200,7 +213,7 @@ function SettingsPage() {
         </div>
       </Card>
 
-      {canPromoteAdmins(userProfile) || canImportExpenses(userProfile) ? (
+      {canPromoteAdmins(userProfile) ? (
         <Card className="space-y-4 border border-teal-100 bg-[linear-gradient(135deg,#f0fdfa_0%,#ffffff_85%)]">
           <div>
             <h3 className="text-base font-semibold text-slate-950">Acessos do superadmin</h3>
@@ -223,15 +236,6 @@ function SettingsPage() {
               <p className="font-semibold text-slate-900">Gerenciar acessos</p>
               <p className="mt-1 text-slate-500">Promover admins, editar membros e manter os acessos da viagem.</p>
             </Link>
-            {canImportExpenses(userProfile) ? (
-              <Link
-                to="/expenses/import"
-                className="rounded-3xl bg-white p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
-              >
-                <p className="font-semibold text-slate-900">Importar planilha oficial</p>
-                <p className="mt-1 text-slate-500">Enviar agenda da viagem, custos estimados e orcamento.</p>
-              </Link>
-            ) : null}
             <Link
               to="/emergency"
               className="rounded-3xl bg-white p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
@@ -246,6 +250,34 @@ function SettingsPage() {
       <Card className="space-y-3">
         <h3 className="text-base font-semibold text-slate-950">Atalhos da viagem</h3>
         <div className="grid gap-3 sm:grid-cols-2">
+          <Link
+            to="/notifications"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-slate-900">Notificacoes</p>
+              {unreadCount > 0 ? (
+                <span className="rounded-full bg-rose-500 px-2 py-1 text-xs font-semibold text-white">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-slate-500">Caixa interna com atualizacoes da viagem.</p>
+          </Link>
+          <Link
+            to="/alarms"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-slate-900">Alarmes</p>
+              {pendingAlarmCount > 0 ? (
+                <span className="rounded-full bg-amber-500 px-2 py-1 text-xs font-semibold text-white">
+                  {pendingAlarmCount > 9 ? '9+' : pendingAlarmCount}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 text-slate-500">Lembretes ativos e proximos avisos da viagem.</p>
+          </Link>
           <Link
             to="/emergency"
             className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
@@ -331,9 +363,6 @@ function SettingsPage() {
             {savingTrip ? 'Salvando viagem...' : 'Salvar imagens da viagem'}
           </Button>
         </form>
-        <p className="text-sm text-slate-500">
-          As demais informacoes da viagem passam a vir da agenda importada e dos modulos reais do app.
-        </p>
       </Card>
     </div>
   )

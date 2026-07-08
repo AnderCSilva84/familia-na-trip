@@ -26,7 +26,7 @@ const pageMeta = [
   { match: '/tips/new', title: 'Nova dica', subtitle: 'Compartilhe uma recomendacao da trip' },
   { match: '/tips/', title: 'Editar dica', subtitle: 'Ajuste categoria, local e link' },
   { match: '/polls/new', title: 'Nova enquete', subtitle: 'Decisoes rapidas para a familia' },
-  { match: '/expenses/import', title: 'Importar gastos', subtitle: 'Migre a planilha oficial para dentro do aplicativo' },
+  { match: '/expenses/import', title: 'Carga interna', subtitle: 'Ferramenta tecnica de manutencao da viagem' },
   { match: '/expenses/new', title: 'Novo gasto', subtitle: 'Registre o gasto da viagem' },
   { match: '/expenses/', title: 'Editar gasto', subtitle: 'Atualize categoria e divisao' },
   { match: '/expenses', title: 'Gastos', subtitle: 'Orcamento sob controle' },
@@ -62,12 +62,11 @@ function AppLayout() {
               <img
                 src="/familiaNaTrip.png"
                 alt="Familia na Trip"
+                loading="eager"
+                decoding="async"
                 className="h-20 w-auto object-contain"
               />
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">Painel da viagem</h2>
-              <p className="mt-2 text-sm text-slate-500">
-                Navegacao otimizada para desktop, notebook e uso continuo durante a viagem.
-              </p>
             </div>
             <div className="sticky top-6">
               <BottomNavigation variant="desktop" />

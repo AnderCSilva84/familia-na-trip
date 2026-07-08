@@ -17,6 +17,24 @@ function notificationsCollection() {
   return collection(db, 'notifications')
 }
 
+function normalizeTargetValue(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function matchesNotificationTarget(notification, audience) {
+  const targets = (notification.targetUsers ?? []).map(normalizeTargetValue).filter(Boolean)
+
+  if (!targets.length) {
+    return true
+  }
+
+  const audienceValues = [audience?.uid, audience?.email, audience?.name, audience?.displayName]
+    .map(normalizeTargetValue)
+    .filter(Boolean)
+
+  return audienceValues.some((value) => targets.includes(value))
+}
+
 function mapNotification(id, data) {
   return {
     id,
@@ -51,11 +69,11 @@ export async function createNotification(data) {
   return { ...payload, createdAt: new Date() }
 }
 
-export async function getNotificationsByUser(tripId, userId) {
+export async function getNotificationsByUser(tripId, audience) {
   return new Promise((resolve, reject) => {
     const unsubscribe = subscribeNotificationsByUser(
       tripId,
-      userId,
+      audience,
       (notifications) => {
         resolve(notifications)
         unsubscribe()
@@ -65,17 +83,14 @@ export async function getNotificationsByUser(tripId, userId) {
   })
 }
 
-export function subscribeNotificationsByUser(tripId, userId, callback, onError) {
+export function subscribeNotificationsByUser(tripId, audience, callback, onError) {
   const notificationsQuery = query(notificationsCollection(), where('tripId', '==', tripId))
   return subscribeToQuery(
     notificationsQuery,
     (snapshot) =>
       snapshot.docs
         .map((notificationDoc) => mapNotification(notificationDoc.id, notificationDoc.data()))
-        .filter(
-          (notification) =>
-            notification.targetUsers.length === 0 || notification.targetUsers.includes(userId),
-        )
+        .filter((notification) => matchesNotificationTarget(notification, audience))
         .sort((left, right) => {
           const leftDate =
             typeof left.createdAt?.toDate === 'function' ? left.createdAt.toDate() : new Date(0)
@@ -98,7 +113,7 @@ export async function markNotificationAsRead(notificationId, userId) {
 }
 
 export async function markAllNotificationsAsRead(tripId, userId) {
-  const notifications = await getNotificationsByUser(tripId, userId)
+  const notifications = await getNotificationsByUser(tripId, { uid: userId })
   await Promise.all(
     notifications
       .filter((notification) => !notification.readBy.includes(userId))

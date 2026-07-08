@@ -1,5 +1,6 @@
 import { FiEdit2, FiImage, FiTrash2 } from 'react-icons/fi'
 import { formatDisplayDate } from '../../utils/formatters'
+import AppImage from '../common/AppImage'
 import Button from '../common/Button'
 import Card from '../common/Card'
 
@@ -9,7 +10,13 @@ function DiaryCard({ entry, canManage = false, onEdit, onDelete }) {
 
   return (
     <Card className="overflow-hidden p-0">
-      {coverImage ? <img src={coverImage} alt={entry.title} className="h-36 w-full object-cover" /> : null}
+      <AppImage
+        src={coverImage}
+        alt={entry.title}
+        className="h-36 w-full object-cover"
+        fallbackClassName="h-36 w-full"
+        fallbackLabel="Diario"
+      />
       <div className="space-y-3 p-4">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
           {formatDisplayDate(entry.date)}

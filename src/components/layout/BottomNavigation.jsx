@@ -1,5 +1,6 @@
 import { FiCalendar, FiGrid, FiHome, FiMap, FiMenu } from 'react-icons/fi'
 import { NavLink } from 'react-router-dom'
+import useAlarms from '../../hooks/useAlarms'
 import useNotifications from '../../hooks/useNotifications'
 
 const items = [
@@ -12,7 +13,18 @@ const items = [
 
 function BottomNavigation({ variant = 'mobile' }) {
   const { unreadCount } = useNotifications()
+  const { alarms } = useAlarms()
   const isDesktop = variant === 'desktop'
+  const todayString = new Date().toISOString().slice(0, 10)
+  const pendingAlarmCount = alarms.filter((alarm) => {
+    if (!alarm?.active) {
+      return false
+    }
+
+    const date = String(alarm.date ?? '').slice(0, 10)
+    return !date || date >= todayString
+  }).length
+  const menuBadgeCount = unreadCount + pendingAlarmCount
 
   return (
     <nav
@@ -36,9 +48,9 @@ function BottomNavigation({ variant = 'mobile' }) {
               <span className={`relative ${isDesktop ? 'flex items-center gap-3' : ''}`}>
                 <Icon size={18} />
                 {isDesktop ? <span>{label}</span> : null}
-                {label === 'Menu' && unreadCount > 0 ? (
+                {label === 'Menu' && menuBadgeCount > 0 ? (
                   <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                    {menuBadgeCount > 9 ? '9+' : menuBadgeCount}
                   </span>
                 ) : null}
               </span>

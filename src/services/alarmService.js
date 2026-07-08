@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   query,
   serverTimestamp,
   setDoc,
@@ -25,9 +26,11 @@ function mapAlarm(id, data) {
     description: data.description ?? '',
     date: data.date ?? '',
     time: data.time ?? '',
+    eventTime: data.eventTime ?? '',
     notifyMembers: data.notifyMembers ?? false,
     membersToNotify: data.membersToNotify ?? [],
     active: data.active ?? true,
+    agendaEventId: data.agendaEventId ?? '',
     createdBy: data.createdBy ?? '',
     createdAt: data.createdAt ?? null,
     updatedAt: data.updatedAt ?? null,
@@ -43,9 +46,11 @@ export async function createAlarm(data) {
     description: data.description ?? '',
     date: data.date,
     time: data.time,
+    eventTime: data.eventTime ?? '',
     notifyMembers: data.notifyMembers ?? false,
     membersToNotify: data.membersToNotify ?? [],
     active: data.active ?? true,
+    agendaEventId: data.agendaEventId ?? '',
     createdBy: data.createdBy,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -106,4 +111,63 @@ export async function deleteAlarm(id) {
 
 export async function toggleAlarm(id, active) {
   return updateAlarm(id, { active })
+}
+
+export async function getAlarmByAgendaEventId(agendaEventId) {
+  if (!agendaEventId) {
+    return null
+  }
+
+  const snapshot = await getDocs(query(alarmsCollection(), where('agendaEventId', '==', agendaEventId)))
+  const alarmDoc = snapshot.docs[0]
+
+  if (!alarmDoc) {
+    return null
+  }
+
+  return mapAlarm(alarmDoc.id, alarmDoc.data())
+}
+
+export async function syncAlarmFromAgendaEvent(agendaEvent) {
+  if (!agendaEvent?.id) {
+    return ''
+  }
+
+  const existingAlarm = await getAlarmByAgendaEventId(agendaEvent.id)
+  const payload = {
+    tripId: agendaEvent.tripId,
+    title: agendaEvent.title,
+    description: agendaEvent.description ?? '',
+    date: agendaEvent.date,
+    time: agendaEvent.alarmTime || agendaEvent.startTime || '',
+    eventTime: agendaEvent.startTime ?? '',
+    notifyMembers: agendaEvent.notifyMembers ?? false,
+    membersToNotify: agendaEvent.membersToNotify ?? [],
+    active: true,
+    agendaEventId: agendaEvent.id,
+    createdBy: agendaEvent.createdBy,
+  }
+
+  if (existingAlarm?.id) {
+    await updateAlarm(existingAlarm.id, payload)
+    return existingAlarm.id
+  }
+
+  const createdAlarm = await createAlarm(payload)
+  return createdAlarm.id
+}
+
+export async function deleteAlarmByAgendaEventId(agendaEventId) {
+  if (!agendaEventId) {
+    return 0
+  }
+
+  const snapshot = await getDocs(query(alarmsCollection(), where('agendaEventId', '==', agendaEventId)))
+
+  if (!snapshot.docs.length) {
+    return 0
+  }
+
+  await Promise.all(snapshot.docs.map((alarmDoc) => deleteDoc(alarmDoc.ref)))
+  return snapshot.docs.length
 }

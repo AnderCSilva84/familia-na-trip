@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { FiExternalLink, FiHeart, FiMap, FiNavigation, FiPhone, FiX } from 'react-icons/fi'
+import { FiExternalLink, FiMap, FiNavigation, FiPhone, FiPlus, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import Avatar from '../../components/common/Avatar'
+import AppImage from '../../components/common/AppImage'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
@@ -35,7 +36,7 @@ function EmergencyPage() {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
-            <FiHeart size={20} />
+            <FiPlus size={20} />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-slate-950">Emergencia</h2>
@@ -56,11 +57,13 @@ function EmergencyPage() {
         ? contacts.map((contact) => (
             <Card key={contact.id} className="overflow-hidden p-0">
               <button type="button" onClick={() => setSelectedContact(contact)} className="block w-full text-left">
-                {contact.image ? (
-                  <img src={contact.image} alt={contact.title} className="h-40 w-full object-cover" />
-                ) : (
-                  <div className="h-32 w-full bg-[linear-gradient(135deg,#ffe4e6_0%,#fff1f2_45%,#ffffff_100%)]" />
-                )}
+                <AppImage
+                  src={contact.image}
+                  alt={contact.title}
+                  className="h-40 w-full object-cover"
+                  fallbackClassName="h-40 w-full bg-[linear-gradient(135deg,#ffe4e6_0%,#fff1f2_45%,#ffffff_100%)] text-rose-300"
+                  fallbackLabel="Hospital"
+                />
                 <div className="space-y-4 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -103,11 +106,13 @@ function EmergencyPage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:items-center">
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-[32px] bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
             <div className="relative">
-              {selectedContact.image ? (
-                <img src={selectedContact.image} alt={selectedContact.title} className="h-56 w-full object-cover" />
-              ) : (
-                <div className="h-44 w-full bg-[linear-gradient(135deg,#ffe4e6_0%,#fff1f2_45%,#ffffff_100%)]" />
-              )}
+              <AppImage
+                src={selectedContact.image}
+                alt={selectedContact.title}
+                className="h-56 w-full object-cover"
+                fallbackClassName="h-56 w-full bg-[linear-gradient(135deg,#ffe4e6_0%,#fff1f2_45%,#ffffff_100%)] text-rose-300"
+                fallbackLabel="Hospital"
+              />
               <button
                 type="button"
                 onClick={() => setSelectedContact(null)}

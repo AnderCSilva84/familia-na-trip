@@ -1,5 +1,6 @@
 import { FiEdit2, FiExternalLink, FiMapPin, FiTrash2 } from 'react-icons/fi'
 import { formatCurrency, formatDisplayDate } from '../../utils/formatters'
+import AppImage from '../common/AppImage'
 import Badge from '../common/Badge'
 import Button from '../common/Button'
 import Card from '../common/Card'
@@ -14,7 +15,13 @@ const statusTone = {
 function VehicleCard({ vehicle, canManage = false, onEdit, onDelete }) {
   return (
     <Card className="overflow-hidden p-0">
-      {vehicle.image ? <img src={vehicle.image} alt={vehicle.vehicleModel} className="h-44 w-full object-cover" /> : null}
+      <AppImage
+        src={vehicle.image}
+        alt={vehicle.vehicleModel}
+        className="h-44 w-full object-cover"
+        fallbackClassName="h-44 w-full"
+        fallbackLabel="Veiculo"
+      />
       <div className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>

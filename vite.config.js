@@ -5,11 +5,58 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+
+          if (id.includes('xlsx')) {
+            return 'xlsx'
+          }
+
+          if (
+            id.includes('react-dom') ||
+            id.includes('react/jsx-runtime') ||
+            id.includes('\\react\\') ||
+            id.includes('/react/')
+          ) {
+            return 'react-core'
+          }
+
+          if (id.includes('react-router')) {
+            return 'router'
+          }
+
+          if (id.includes('firebase')) {
+            return 'firebase'
+          }
+
+          if (id.includes('leaflet') || id.includes('react-leaflet')) {
+            return 'maps'
+          }
+
+          if (id.includes('react-icons')) {
+            return 'icons'
+          }
+
+          return 'vendor'
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+      },
       includeAssets: ['familiaNaTrip.png', 'familia.png'],
       manifest: {
         name: 'Familia na Trip',

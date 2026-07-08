@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -8,6 +8,7 @@ import Loading from '../../components/common/Loading'
 import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useAgenda from '../../hooks/useAgenda'
+import useMembers from '../../hooks/useMembers'
 import { formatDateInput } from '../../utils/formatters'
 import { getLinkPreviewData } from '../../utils/linkPreview'
 import { resolveMapMetadata } from '../../utils/locationPresets'
@@ -18,31 +19,37 @@ function clampPercentage(value) {
   return Math.min(95, Math.max(5, value))
 }
 
-function AgendaFormPage() {
-  const navigate = useNavigate()
-  const { eventId } = useParams()
-  const { agenda, loading, error, usingMockData, create, update } = useAgenda()
+function getMemberTargetValue(member) {
+  return member.userId || member.email || member.id
+}
+
+function memberMatchesTarget(member, target) {
+  const normalizedTarget = String(target ?? '').trim().toLowerCase()
+
+  return [member.userId, member.email, member.name, member.id]
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalizedTarget)
+}
+
+function AgendaFormContent({ editingEvent, eventId, usingMockData, create, update, members, navigate }) {
+  const initialEvent = editingEvent ?? null
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState('')
-  const editingEvent = agenda.find((item) => item.id === eventId)
+  const [selectedType, setSelectedType] = useState(initialEvent?.type ?? 'evento')
+  const [notifyMembers, setNotifyMembers] = useState(Boolean(initialEvent?.notifyMembers))
+  const [alarmTime, setAlarmTime] = useState(initialEvent?.alarmTime ?? initialEvent?.startTime ?? '')
+  const [selectedMembers, setSelectedMembers] = useState(initialEvent?.membersToNotify ?? [])
   const [selectedImage, setSelectedImage] = useState(null)
-  const [reservationLink, setReservationLink] = useState(editingEvent?.link ?? '')
-  const [manualImageUrl, setManualImageUrl] = useState(editingEvent?.image ?? '')
-  const [imagePreview, setImagePreview] = useState(editingEvent?.image ?? '')
+  const [reservationLink, setReservationLink] = useState(initialEvent?.link ?? '')
+  const [manualImageUrl, setManualImageUrl] = useState(initialEvent?.image ?? '')
+  const [imagePreview, setImagePreview] = useState(initialEvent?.image ?? '')
   const previewUrlRef = useRef('')
   const [mapPosition, setMapPosition] = useState(() => ({
-    x: Number(resolveMapMetadata(editingEvent ?? {}).mapX ?? 52) || 52,
-    y: Number(resolveMapMetadata(editingEvent ?? {}).mapY ?? 58) || 58,
-    enabled: Boolean(resolveMapMetadata(editingEvent ?? {}).mapX && resolveMapMetadata(editingEvent ?? {}).mapY),
+    x: Number(resolveMapMetadata(initialEvent ?? {}).mapX ?? 52) || 52,
+    y: Number(resolveMapMetadata(initialEvent ?? {}).mapY ?? 58) || 58,
+    enabled: Boolean(resolveMapMetadata(initialEvent ?? {}).mapX && resolveMapMetadata(initialEvent ?? {}).mapY),
   }))
-
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) {
-        URL.revokeObjectURL(previewUrlRef.current)
-      }
-    }
-  }, [])
 
   function handleImageChange(event) {
     const nextFile = event.target.files?.[0] ?? null
@@ -55,7 +62,7 @@ function AgendaFormPage() {
     setSelectedImage(nextFile)
 
     if (!nextFile) {
-      setImagePreview(manualImageUrl || editingEvent?.image || '')
+      setImagePreview(manualImageUrl || initialEvent?.image || '')
       return
     }
 
@@ -98,16 +105,19 @@ function AgendaFormPage() {
         location: String(formData.get('location') ?? ''),
         estimatedCost: Number(formData.get('estimatedCost') ?? 0) || 0,
         actualCost: Number(formData.get('actualCost') ?? 0) || 0,
-        expenseCategory: editingEvent?.expenseCategory ?? 'Outros',
-        createdBy: editingEvent?.createdBy ?? '',
+        expenseCategory: initialEvent?.expenseCategory ?? 'Outros',
+        createdBy: initialEvent?.createdBy ?? '',
         link: reservationLink,
-        image: selectedImage ? editingEvent?.image ?? '' : manualImageUrl.trim() || editingEvent?.image || '',
-        imagePath: editingEvent?.imagePath ?? '',
+        image: selectedImage ? initialEvent?.image ?? '' : manualImageUrl.trim() || initialEvent?.image || '',
+        imagePath: initialEvent?.imagePath ?? '',
         imageFile: selectedImage,
-        currentImagePath: editingEvent?.imagePath ?? '',
+        currentImagePath: initialEvent?.imagePath ?? '',
         mapX: mapPosition.enabled ? String(Math.round(mapPosition.x)) : '',
         mapY: mapPosition.enabled ? String(Math.round(mapPosition.y)) : '',
-        type: String(formData.get('type') ?? 'evento'),
+        type: selectedType,
+        notifyMembers: selectedType === 'alarme' ? notifyMembers : false,
+        membersToNotify: selectedType === 'alarme' && notifyMembers ? selectedMembers : [],
+        alarmTime: selectedType === 'alarme' ? alarmTime : '',
         relatedId: String(formData.get('relatedId') ?? ''),
       }
 
@@ -144,10 +154,12 @@ function AgendaFormPage() {
     }))
   }
 
-  if (loading) return <Loading />
-  if (error) return <ErrorState title="Falha ao abrir agenda" description={error} />
-  if (eventId && !editingEvent && !usingMockData) {
-    return <EmptyState title="Evento nao encontrado" description="Esse evento pode ter sido removido." />
+  function toggleMember(memberName) {
+    setSelectedMembers((current) =>
+      current.includes(memberName)
+        ? current.filter((item) => item !== memberName)
+        : [...current, memberName],
+    )
   }
 
   return (
@@ -158,30 +170,30 @@ function AgendaFormPage() {
       />
       <Card>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input name="title" label="Titulo" defaultValue={editingEvent?.title ?? ''} required />
+          <Input name="title" label="Titulo" defaultValue={initialEvent?.title ?? ''} required />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input name="weekday" label="Dia da semana" defaultValue={editingEvent?.weekday ?? ''} />
-            <Input name="city" label="Cidade" defaultValue={editingEvent?.city ?? ''} />
+            <Input name="weekday" label="Dia da semana" defaultValue={initialEvent?.weekday ?? ''} />
+            <Input name="city" label="Cidade" defaultValue={initialEvent?.city ?? ''} />
           </div>
-          <Input name="local" label="Local / parada" defaultValue={editingEvent?.local ?? editingEvent?.title ?? ''} />
+          <Input name="local" label="Local / parada" defaultValue={initialEvent?.local ?? initialEvent?.title ?? ''} />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input name="address" label="Endereco" defaultValue={editingEvent?.address ?? ''} placeholder="Rua, avenida, numero..." />
-            <Input name="postalCode" label="CEP" defaultValue={editingEvent?.postalCode ?? ''} placeholder="00000-000" />
+            <Input name="address" label="Endereco" defaultValue={initialEvent?.address ?? ''} placeholder="Rua, avenida, numero..." />
+            <Input name="postalCode" label="CEP" defaultValue={initialEvent?.postalCode ?? ''} placeholder="00000-000" />
           </div>
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
             <span>Descricao</span>
             <textarea
               name="description"
-              defaultValue={editingEvent?.description ?? ''}
+              defaultValue={initialEvent?.description ?? ''}
               className="min-h-28 rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             />
           </label>
-          <Input name="date" label="Data" type="date" defaultValue={formatDateInput(editingEvent?.date)} required />
-          <Input name="startTime" label="Horario" type="time" step="1" defaultValue={editingEvent?.startTime ?? ''} />
+          <Input name="date" label="Data" type="date" defaultValue={formatDateInput(initialEvent?.date)} required />
+          <Input name="startTime" label="Horario do evento" type="time" step="1" defaultValue={initialEvent?.startTime ?? ''} />
           <Input
             name="location"
             label="Local / cidade"
-            defaultValue={editingEvent?.location ?? ''}
+            defaultValue={initialEvent?.location ?? ''}
             placeholder="Ex: Salvador - Praia do Forte"
           />
           <div className="grid gap-3 sm:grid-cols-2">
@@ -191,7 +203,7 @@ function AgendaFormPage() {
               type="number"
               min="0"
               step="0.01"
-              defaultValue={editingEvent?.estimatedCost ?? ''}
+              defaultValue={initialEvent?.estimatedCost ?? ''}
             />
             <Input
               name="actualCost"
@@ -199,7 +211,7 @@ function AgendaFormPage() {
               type="number"
               min="0"
               step="0.01"
-              defaultValue={editingEvent?.actualCost ?? ''}
+              defaultValue={initialEvent?.actualCost ?? ''}
             />
           </div>
           <Input
@@ -222,7 +234,9 @@ function AgendaFormPage() {
             {imagePreview ? (
               <img
                 src={imagePreview}
-                alt={editingEvent?.title ?? 'Preview do evento'}
+                alt={initialEvent?.title ?? 'Preview do evento'}
+                loading="lazy"
+                decoding="async"
                 className="h-48 w-full rounded-[28px] object-cover"
               />
             ) : (
@@ -304,7 +318,8 @@ function AgendaFormPage() {
             <span>Tipo</span>
             <select
               name="type"
-              defaultValue={editingEvent?.type ?? 'evento'}
+              value={selectedType}
+              onChange={(event) => setSelectedType(event.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             >
               {types.map((type) => (
@@ -314,7 +329,63 @@ function AgendaFormPage() {
               ))}
             </select>
           </label>
-          <Input name="relatedId" label="ID relacionado (opcional)" defaultValue={editingEvent?.relatedId ?? ''} />
+
+          {selectedType === 'alarme' ? (
+            <div className="space-y-4 rounded-3xl bg-slate-50 p-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">Configuracao do alarme</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  O evento continua na agenda e tambem cria um alarme real dentro do app.
+                </p>
+              </div>
+
+              <Input
+                name="alarmTime"
+                label="Horario do lembrete"
+                type="time"
+                step="1"
+                value={alarmTime}
+                onChange={(event) => setAlarmTime(event.target.value)}
+                required={selectedType === 'alarme'}
+              />
+
+              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={notifyMembers}
+                  onChange={(event) => setNotifyMembers(event.target.checked)}
+                />
+                Notificar membros selecionados
+              </label>
+
+              {notifyMembers ? (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-slate-600">Membros para notificar</p>
+                  <div className="flex flex-wrap gap-2">
+                    {members.map((member) => {
+                      const memberValue = getMemberTargetValue(member)
+                      const selected = selectedMembers.some((item) => memberMatchesTarget(member, item))
+
+                      return (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => toggleMember(memberValue)}
+                          className={`rounded-full px-4 py-2 text-sm font-medium ${
+                            selected ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {member.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <Input name="relatedId" label="ID relacionado (opcional)" defaultValue={initialEvent?.relatedId ?? ''} />
           <div className="grid grid-cols-2 gap-3">
             <Button type="button" variant="secondary" onClick={() => navigate('/agenda')}>
               Cancelar
@@ -326,6 +397,33 @@ function AgendaFormPage() {
         </form>
       </Card>
     </div>
+  )
+}
+
+function AgendaFormPage() {
+  const navigate = useNavigate()
+  const { eventId } = useParams()
+  const { agenda, loading, error, usingMockData, create, update } = useAgenda()
+  const { members } = useMembers()
+  const editingEvent = agenda.find((item) => item.id === eventId)
+
+  if (loading) return <Loading />
+  if (error) return <ErrorState title="Falha ao abrir agenda" description={error} />
+  if (eventId && !editingEvent && !usingMockData) {
+    return <EmptyState title="Evento nao encontrado" description="Esse evento pode ter sido removido." />
+  }
+
+  return (
+    <AgendaFormContent
+      key={editingEvent?.id ?? 'new-event'}
+      editingEvent={editingEvent}
+      eventId={eventId}
+      usingMockData={usingMockData}
+      create={create}
+      update={update}
+      members={members}
+      navigate={navigate}
+    />
   )
 }
 

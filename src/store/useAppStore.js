@@ -5,6 +5,7 @@ import { ensureDefaultTripForUser, getTripById } from '../services/tripService'
 import { ensureUserProfile } from '../services/userService'
 
 let authUnsubscribe = null
+let authBootTimeout = null
 
 const useAppStore = create((set) => ({
   currentUser: null,
@@ -39,7 +40,29 @@ const useAppStore = create((set) => ({
 
     set({ loadingAuth: true })
 
+    if (authBootTimeout) {
+      window.clearTimeout(authBootTimeout)
+    }
+
+    authBootTimeout = window.setTimeout(() => {
+      set((state) => {
+        if (!state.loadingAuth) {
+          return state
+        }
+
+        return {
+          loadingAuth: false,
+          authError: state.authError || 'A inicializacao demorou mais do que o esperado. Voce ja pode entrar manualmente.',
+        }
+      })
+    }, 4000)
+
     const unsubscribe = listenAuthChanges(async (user) => {
+      if (authBootTimeout) {
+        window.clearTimeout(authBootTimeout)
+        authBootTimeout = null
+      }
+
       if (!user) {
         set({
           currentUser: null,
@@ -90,6 +113,11 @@ const useAppStore = create((set) => ({
     })
 
     authUnsubscribe = () => {
+      if (authBootTimeout) {
+        window.clearTimeout(authBootTimeout)
+        authBootTimeout = null
+      }
+
       unsubscribe()
       authUnsubscribe = null
     }

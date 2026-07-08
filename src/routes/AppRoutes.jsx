@@ -1,38 +1,48 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppLayout from '../layouts/AppLayout'
 import AdminRoute from './AdminRoute'
 import PrivateRoute from './PrivateRoute'
-import LoginPage from '../pages/Auth/LoginPage'
+import Loading from '../components/common/Loading'
 import WelcomePage from '../pages/Auth/WelcomePage'
-import DashboardPage from '../pages/Dashboard/DashboardPage'
-import MapPage from '../pages/Map/MapPage'
-import MembersPage from '../pages/Members/MembersPage'
-import MemberFormPage from '../pages/Members/MemberFormPage'
-import PollsPage from '../pages/Polls/PollsPage'
-import PollFormPage from '../pages/Polls/PollFormPage'
-import DiaryPage from '../pages/Diary/DiaryPage'
-import NewDiaryEntryPage from '../pages/Diary/NewDiaryEntryPage'
-import ItineraryPage from '../pages/Itinerary/ItineraryPage'
-import ItineraryFormPage from '../pages/Itinerary/ItineraryFormPage'
-import TipsPage from '../pages/Tips/TipsPage'
-import TipFormPage from '../pages/Tips/TipFormPage'
-import HotelsPage from '../pages/Hotels/HotelsPage'
-import HotelFormPage from '../pages/Hotels/HotelFormPage'
-import VehiclesPage from '../pages/Vehicles/VehiclesPage'
-import VehicleFormPage from '../pages/Vehicles/VehicleFormPage'
-import ExpensesPage from '../pages/Expenses/ExpensesPage'
-import ExpenseImportPage from '../pages/Expenses/ExpenseImportPage'
-import ExpenseFormPage from '../pages/Expenses/ExpenseFormPage'
-import AdminPanelPage from '../pages/Admin/AdminPanelPage'
-import AgendaPage from '../pages/Agenda/AgendaPage'
-import AgendaFormPage from '../pages/Agenda/AgendaFormPage'
-import AlarmsPage from '../pages/Agenda/AlarmsPage'
-import AlarmFormPage from '../pages/Agenda/AlarmFormPage'
-import NotificationsPage from '../pages/Notifications/NotificationsPage'
-import SettingsPage from '../pages/Settings/SettingsPage'
-import ReviewsPage from '../pages/Reviews/ReviewsPage'
-import EmergencyPage from '../pages/Emergency/EmergencyPage'
-import EmergencyFormPage from '../pages/Emergency/EmergencyFormPage'
+import LoginPage from '../pages/Auth/LoginPage'
+const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage'))
+const MapPage = lazy(() => import('../pages/Map/MapPage'))
+const MembersPage = lazy(() => import('../pages/Members/MembersPage'))
+const MemberFormPage = lazy(() => import('../pages/Members/MemberFormPage'))
+const PollsPage = lazy(() => import('../pages/Polls/PollsPage'))
+const PollFormPage = lazy(() => import('../pages/Polls/PollFormPage'))
+const DiaryPage = lazy(() => import('../pages/Diary/DiaryPage'))
+const NewDiaryEntryPage = lazy(() => import('../pages/Diary/NewDiaryEntryPage'))
+const ItineraryPage = lazy(() => import('../pages/Itinerary/ItineraryPage'))
+const ItineraryFormPage = lazy(() => import('../pages/Itinerary/ItineraryFormPage'))
+const TipsPage = lazy(() => import('../pages/Tips/TipsPage'))
+const TipFormPage = lazy(() => import('../pages/Tips/TipFormPage'))
+const HotelsPage = lazy(() => import('../pages/Hotels/HotelsPage'))
+const HotelFormPage = lazy(() => import('../pages/Hotels/HotelFormPage'))
+const VehiclesPage = lazy(() => import('../pages/Vehicles/VehiclesPage'))
+const VehicleFormPage = lazy(() => import('../pages/Vehicles/VehicleFormPage'))
+const ExpensesPage = lazy(() => import('../pages/Expenses/ExpensesPage'))
+const ExpenseImportPage = lazy(() => import('../pages/Expenses/ExpenseImportPage'))
+const ExpenseFormPage = lazy(() => import('../pages/Expenses/ExpenseFormPage'))
+const AdminPanelPage = lazy(() => import('../pages/Admin/AdminPanelPage'))
+const AgendaPage = lazy(() => import('../pages/Agenda/AgendaPage'))
+const AgendaFormPage = lazy(() => import('../pages/Agenda/AgendaFormPage'))
+const AlarmsPage = lazy(() => import('../pages/Agenda/AlarmsPage'))
+const AlarmFormPage = lazy(() => import('../pages/Agenda/AlarmFormPage'))
+const NotificationsPage = lazy(() => import('../pages/Notifications/NotificationsPage'))
+const SettingsPage = lazy(() => import('../pages/Settings/SettingsPage'))
+const ReviewsPage = lazy(() => import('../pages/Reviews/ReviewsPage'))
+const EmergencyPage = lazy(() => import('../pages/Emergency/EmergencyPage'))
+const EmergencyFormPage = lazy(() => import('../pages/Emergency/EmergencyFormPage'))
+
+function renderPage(Component) {
+  return (
+    <Suspense fallback={<Loading />}>
+      <Component />
+    </Suspense>
+  )
+}
 
 function AppRoutes() {
   return (
@@ -43,46 +53,46 @@ function AppRoutes() {
 
         <Route element={<PrivateRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/members" element={<MembersPage />} />
-            <Route path="/polls" element={<PollsPage />} />
-            <Route path="/polls/new" element={<PollFormPage />} />
-            <Route path="/diary" element={<DiaryPage />} />
-            <Route path="/diary/new" element={<NewDiaryEntryPage />} />
-            <Route path="/diary/:entryId/edit" element={<NewDiaryEntryPage />} />
-            <Route path="/itinerary" element={<ItineraryPage />} />
-            <Route path="/itinerary/new" element={<ItineraryFormPage />} />
-            <Route path="/itinerary/:itemId/edit" element={<ItineraryFormPage />} />
-            <Route path="/tips" element={<TipsPage />} />
-            <Route path="/tips/new" element={<TipFormPage />} />
-            <Route path="/tips/:tipId/edit" element={<TipFormPage />} />
-            <Route path="/hotels" element={<HotelsPage />} />
-            <Route path="/hotels/new" element={<HotelFormPage />} />
-            <Route path="/hotels/:hotelId/edit" element={<HotelFormPage />} />
-            <Route path="/vehicles" element={<VehiclesPage />} />
-            <Route path="/vehicles/new" element={<VehicleFormPage />} />
-            <Route path="/vehicles/:vehicleId/edit" element={<VehicleFormPage />} />
-            <Route path="/expenses" element={<ExpensesPage />} />
-            <Route path="/expenses/new" element={<ExpenseFormPage />} />
-            <Route path="/expenses/:expenseId/edit" element={<ExpenseFormPage />} />
-            <Route path="/agenda" element={<AgendaPage />} />
-            <Route path="/agenda/new" element={<AgendaFormPage />} />
-            <Route path="/agenda/:eventId/edit" element={<AgendaFormPage />} />
-            <Route path="/alarms" element={<AlarmsPage />} />
-            <Route path="/alarms/new" element={<AlarmFormPage />} />
-            <Route path="/alarms/:alarmId/edit" element={<AlarmFormPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/reviews" element={<ReviewsPage />} />
-            <Route path="/emergency" element={<EmergencyPage />} />
-            <Route path="/emergency/new" element={<EmergencyFormPage />} />
-            <Route path="/emergency/:contactId/edit" element={<EmergencyFormPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/dashboard" element={renderPage(DashboardPage)} />
+            <Route path="/map" element={renderPage(MapPage)} />
+            <Route path="/members" element={renderPage(MembersPage)} />
+            <Route path="/polls" element={renderPage(PollsPage)} />
+            <Route path="/polls/new" element={renderPage(PollFormPage)} />
+            <Route path="/diary" element={renderPage(DiaryPage)} />
+            <Route path="/diary/new" element={renderPage(NewDiaryEntryPage)} />
+            <Route path="/diary/:entryId/edit" element={renderPage(NewDiaryEntryPage)} />
+            <Route path="/itinerary" element={renderPage(ItineraryPage)} />
+            <Route path="/itinerary/new" element={renderPage(ItineraryFormPage)} />
+            <Route path="/itinerary/:itemId/edit" element={renderPage(ItineraryFormPage)} />
+            <Route path="/tips" element={renderPage(TipsPage)} />
+            <Route path="/tips/new" element={renderPage(TipFormPage)} />
+            <Route path="/tips/:tipId/edit" element={renderPage(TipFormPage)} />
+            <Route path="/hotels" element={renderPage(HotelsPage)} />
+            <Route path="/hotels/new" element={renderPage(HotelFormPage)} />
+            <Route path="/hotels/:hotelId/edit" element={renderPage(HotelFormPage)} />
+            <Route path="/vehicles" element={renderPage(VehiclesPage)} />
+            <Route path="/vehicles/new" element={renderPage(VehicleFormPage)} />
+            <Route path="/vehicles/:vehicleId/edit" element={renderPage(VehicleFormPage)} />
+            <Route path="/expenses" element={renderPage(ExpensesPage)} />
+            <Route path="/expenses/new" element={renderPage(ExpenseFormPage)} />
+            <Route path="/expenses/:expenseId/edit" element={renderPage(ExpenseFormPage)} />
+            <Route path="/agenda" element={renderPage(AgendaPage)} />
+            <Route path="/agenda/new" element={renderPage(AgendaFormPage)} />
+            <Route path="/agenda/:eventId/edit" element={renderPage(AgendaFormPage)} />
+            <Route path="/alarms" element={renderPage(AlarmsPage)} />
+            <Route path="/alarms/new" element={renderPage(AlarmFormPage)} />
+            <Route path="/alarms/:alarmId/edit" element={renderPage(AlarmFormPage)} />
+            <Route path="/notifications" element={renderPage(NotificationsPage)} />
+            <Route path="/reviews" element={renderPage(ReviewsPage)} />
+            <Route path="/emergency" element={renderPage(EmergencyPage)} />
+            <Route path="/emergency/new" element={renderPage(EmergencyFormPage)} />
+            <Route path="/emergency/:contactId/edit" element={renderPage(EmergencyFormPage)} />
+            <Route path="/settings" element={renderPage(SettingsPage)} />
             <Route element={<AdminRoute />}>
-              <Route path="/admin" element={<AdminPanelPage />} />
-              <Route path="/expenses/import" element={<ExpenseImportPage />} />
-              <Route path="/members/manage" element={<MemberFormPage />} />
-              <Route path="/members/manage/:memberId" element={<MemberFormPage />} />
+              <Route path="/admin" element={renderPage(AdminPanelPage)} />
+              <Route path="/expenses/import" element={renderPage(ExpenseImportPage)} />
+              <Route path="/members/manage" element={renderPage(MemberFormPage)} />
+              <Route path="/members/manage/:memberId" element={renderPage(MemberFormPage)} />
             </Route>
           </Route>
         </Route>

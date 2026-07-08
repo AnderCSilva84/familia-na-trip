@@ -45,7 +45,7 @@ function useNotifications() {
 
     const unsubscribe = subscribeNotificationsByUser(
       trip.id,
-      userProfile.uid,
+      userProfile,
       (data) => {
         setNotifications(data)
         setLoading(false)
@@ -58,14 +58,14 @@ function useNotifications() {
     )
 
     return unsubscribe
-  }, [trip?.id, userProfile?.uid, usingMockData])
+  }, [trip?.id, userProfile, userProfile?.uid, usingMockData])
 
   async function refresh() {
     if (!trip?.id || !userProfile?.uid) {
       setNotifications([])
       return
     }
-    setNotifications(await getNotificationsByUser(trip.id, userProfile.uid))
+    setNotifications(await getNotificationsByUser(trip.id, userProfile))
   }
 
   async function markAsRead(id) {

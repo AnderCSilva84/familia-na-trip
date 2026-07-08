@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
+import AppImage from '../../components/common/AppImage'
 import Loading from '../../components/common/Loading'
 import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
@@ -76,9 +77,13 @@ function AgendaPage() {
 
     return (
       <Card key={item.id} className="space-y-3">
-        {item.image ? (
-          <img src={item.image} alt={item.title} className="h-44 w-full rounded-[28px] object-cover" />
-        ) : null}
+        <AppImage
+          src={item.image}
+          alt={item.title}
+          className="h-44 w-full rounded-[28px] object-cover"
+          fallbackClassName="h-44 w-full rounded-[28px]"
+          fallbackLabel={typeLabels[item.type] ?? 'Evento'}
+        />
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-slate-950">{item.title}</h3>
@@ -250,7 +255,7 @@ function AgendaPage() {
         <Card className="space-y-4">
           <EmptyState
             title="Nenhum evento neste dia"
-            description="Selecione outro dia no calendario ou importe a planilha oficial."
+            description="Selecione outro dia no calendario para ver a programacao da viagem."
           />
         </Card>
       ) : null}

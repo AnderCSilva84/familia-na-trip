@@ -11,6 +11,19 @@ import useAlarms from '../../hooks/useAlarms'
 import useMembers from '../../hooks/useMembers'
 import { formatDateInput } from '../../utils/formatters'
 
+function getMemberTargetValue(member) {
+  return member.userId || member.email || member.id
+}
+
+function memberMatchesTarget(member, target) {
+  const normalizedTarget = String(target ?? '').trim().toLowerCase()
+
+  return [member.userId, member.email, member.name, member.id]
+    .map((value) => String(value ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalizedTarget)
+}
+
 function AlarmFormPage() {
   const navigate = useNavigate()
   const { alarmId } = useParams()
@@ -22,12 +35,12 @@ function AlarmFormPage() {
   const editingAlarm = alarms.find((alarm) => alarm.id === alarmId)
   const membersToNotify = selectedMembers ?? editingAlarm?.membersToNotify ?? []
 
-  function toggleMember(memberName) {
+  function toggleMember(memberValue) {
     setSelectedMembers((current) => {
       const base = current ?? editingAlarm?.membersToNotify ?? []
-      return base.includes(memberName)
-        ? base.filter((item) => item !== memberName)
-        : [...base, memberName]
+      return base.includes(memberValue)
+        ? base.filter((item) => item !== memberValue)
+        : [...base, memberValue]
     })
   }
 
@@ -87,9 +100,10 @@ function AlarmFormPage() {
             <p className="text-sm font-medium text-slate-600">Membros para notificar</p>
             <div className="flex flex-wrap gap-2">
               {members.map((member) => {
-                const selected = membersToNotify.includes(member.name)
+                const memberValue = getMemberTargetValue(member)
+                const selected = membersToNotify.some((item) => memberMatchesTarget(member, item))
                 return (
-                  <button key={member.id} type="button" onClick={() => toggleMember(member.name)} className={`rounded-full px-4 py-2 text-sm font-medium ${selected ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <button key={member.id} type="button" onClick={() => toggleMember(memberValue)} className={`rounded-full px-4 py-2 text-sm font-medium ${selected ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
                     {member.name}
                   </button>
                 )

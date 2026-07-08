@@ -1,5 +1,6 @@
 import { FiEdit2, FiExternalLink, FiMapPin, FiTrash2 } from 'react-icons/fi'
 import { formatDayNumber, formatDisplayDate, formatWeekdayShort, normalizeDisplayTime } from '../../utils/formatters'
+import AppImage from '../common/AppImage'
 import Badge from '../common/Badge'
 import Button from '../common/Button'
 import Card from '../common/Card'
@@ -10,9 +11,13 @@ function ItineraryCard({ item, canManage = false, onEdit, onDelete }) {
 
   return (
     <Card className="space-y-4">
-      {item.image ? (
-        <img src={item.image} alt={item.title} className="h-44 w-full rounded-[28px] object-cover" />
-      ) : null}
+      <AppImage
+        src={item.image}
+        alt={item.title}
+        className="h-44 w-full rounded-[28px] object-cover"
+        fallbackClassName="h-44 w-full rounded-[28px]"
+        fallbackLabel="Roteiro"
+      />
       <div className="flex gap-4">
         <div className="min-w-14 text-center">
           <p className="text-2xl font-semibold text-slate-950">{formatDayNumber(item.date)}</p>

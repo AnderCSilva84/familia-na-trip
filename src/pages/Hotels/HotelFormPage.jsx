@@ -115,6 +115,8 @@ function HotelFormPage() {
             <img
               src={imageUrl}
               alt={editingHotel?.hotelName ?? 'Preview da hospedagem'}
+              loading="lazy"
+              decoding="async"
               className="h-48 w-full rounded-[28px] object-cover"
             />
           ) : null}

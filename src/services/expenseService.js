@@ -19,6 +19,13 @@ function expensesCollection() {
   return collection(db, 'expenses')
 }
 
+function isSettledInApp(expense) {
+  return (
+    expense.type === 'efetivado' &&
+    (Boolean(String(expense.relatedAgendaId ?? '').trim()) || expense.settled === true)
+  )
+}
+
 function mapExpense(id, data) {
   return {
     id,
@@ -28,6 +35,8 @@ function mapExpense(id, data) {
     category: data.category ?? 'Outros',
     type: data.type ?? 'efetivado',
     value: Number(data.value ?? 0),
+    settled: data.settled === true,
+    settledAt: data.settledAt ?? null,
     paidBy: data.paidBy ?? '',
     dividedBetween: data.dividedBetween ?? [],
     date: data.date ?? '',
@@ -41,6 +50,7 @@ function mapExpense(id, data) {
 }
 
 export async function createExpense(data) {
+  const isSettled = data.type === 'efetivado' && data.settled === true
   const expenseRef = doc(expensesCollection())
   const payload = {
     id: expenseRef.id,
@@ -50,6 +60,8 @@ export async function createExpense(data) {
     category: data.category,
     type: data.type,
     value: Number(data.value),
+    settled: isSettled,
+    settledAt: isSettled ? serverTimestamp() : null,
     paidBy: data.paidBy,
     dividedBetween: data.dividedBetween ?? [],
     date: data.date,
@@ -99,9 +111,12 @@ export function subscribeExpensesByTrip(tripId, callback, onError) {
 
 export async function updateExpense(id, data) {
   const expenseRef = doc(expensesCollection(), id)
+  const isSettled = data.type === 'efetivado' && data.settled === true
   await updateDoc(expenseRef, {
     ...data,
     value: Number(data.value),
+    settled: isSettled,
+    settledAt: isSettled ? serverTimestamp() : null,
     updatedAt: serverTimestamp(),
   })
 }
@@ -134,6 +149,8 @@ export async function importExpensesBatch({ tripId, createdBy, expenses, replace
       category: expense.category,
       type: expense.type,
       value: Number(expense.value ?? 0),
+      settled: expense.type === 'efetivado' && expense.settled === true,
+      settledAt: expense.type === 'efetivado' && expense.settled === true ? serverTimestamp() : null,
       paidBy: expense.paidBy ?? '',
       dividedBetween: expense.dividedBetween ?? [],
       date: expense.date ?? '',
@@ -168,14 +185,13 @@ export function calculateExpenseSummary(expenses) {
 
       if (expense.type === 'estimado') {
         accumulator.totalEstimated += value
-      } else {
+      } else if (isSettledInApp(expense)) {
         accumulator.totalActual += value
+        accumulator.byCategory[expense.category] =
+          (accumulator.byCategory[expense.category] ?? 0) + value
+        accumulator.byMember[expense.paidBy || 'Sem responsavel'] =
+          (accumulator.byMember[expense.paidBy || 'Sem responsavel'] ?? 0) + value
       }
-
-      accumulator.byCategory[expense.category] =
-        (accumulator.byCategory[expense.category] ?? 0) + value
-
-      accumulator.byMember[expense.paidBy] = (accumulator.byMember[expense.paidBy] ?? 0) + value
 
       return accumulator
     },
@@ -232,6 +248,8 @@ export async function syncAgendaActualExpense({
     category,
     type: 'efetivado',
     value: normalizedValue,
+    settled: true,
+    settledAt: serverTimestamp(),
     paidBy: '',
     dividedBetween: [],
     date: date ?? '',
