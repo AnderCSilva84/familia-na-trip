@@ -1,0 +1,6 @@
+export type Mood='neutral'|'happy'|'encouraging'|'celebrating'|'sleeping'|'reading'|'studying'|'playing'|'waiting'|'helping'
+export type Child={id:string;userId:string;name:string;nickname:string;birthDate:string;preferredColor:string;stars:number;avatarUrl?:string}
+export type RoutineStep={id:string;title:string;description:string;order:number;imageUrl?:string;audioUrl?:string}
+export type Routine={id:string;userId:string;childId:string;title:string;description:string;category:string;startTime:string;estimatedDuration:number;daysOfWeek:number[];steps:RoutineStep[];rewardStars:number;celebrationMode:'calm'|'fun'|'silent';isActive:boolean;order:number;nextRoutineText?:string;imageUrl?:string;audioUrl?:string;bookTitle?:string;pages?:number;challengeType?:string;traceText?:string}
+export type Execution={id:string;userId:string;childId:string;routineId:string;routineTitle:string;executionDate:string;startedAt?:string;completedAt?:string;status:'pending'|'started'|'paused'|'completed'|'skipped';completedSteps:string[];helpRequested:boolean;pauseRequested:boolean;starsEarned:number;category?:string}
+export type SensorySettings={soundEnabled:boolean;voiceEnabled:boolean;animationLevel:'full'|'reduced'|'none';celebrationMode:'calm'|'fun'|'silent';highContrast:boolean;largeButtons:boolean;reducedMotion:boolean;showTimers:boolean;speechRate:number}

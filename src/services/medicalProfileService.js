@@ -1,0 +1,3 @@
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'; import { db, ensureFirebaseConfigured } from '../firebase/config'
+export async function getMedicalProfile(userId) { ensureFirebaseConfigured(); if (!userId) return null; const snapshot = await getDoc(doc(db, 'medicalProfiles', userId)); return snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null }
+export async function saveMedicalProfile(userId, data) { ensureFirebaseConfigured(); const payload = { ...data, userId, updatedAt: serverTimestamp() }; await setDoc(doc(db, 'medicalProfiles', userId), payload, { merge: true }); return payload }

@@ -56,6 +56,22 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'trip-documents',
+              expiration: { maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ request }) => request.destination === 'image',
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'trip-images', expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+          },
+        ],
       },
       includeAssets: ['familiaNaTrip.png', 'familia.png'],
       manifest: {

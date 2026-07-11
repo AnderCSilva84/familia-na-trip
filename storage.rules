@@ -49,6 +49,14 @@ service firebase.storage {
       allow write: if isSignedIn();
     }
 
+    match /trips/{tripId}/wallet/{documentId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn()
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf';
+      allow delete: if isSignedIn();
+    }
+
     // Reserva para importacoes, anexos e backups controlados pelo app.
     match /trips/{tripId}/imports/{allPaths=**} {
       allow read: if isSignedIn();

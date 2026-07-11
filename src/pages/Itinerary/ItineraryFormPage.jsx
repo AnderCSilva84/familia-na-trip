@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -20,6 +20,24 @@ function ItineraryFormPage() {
   const editingItem = items.find((item) => item.id === itemId)
   const [reservationLink, setReservationLink] = useState(editingItem?.link ?? '')
   const [imageUrl, setImageUrl] = useState(editingItem?.image ?? '')
+
+  useEffect(() => {
+    if (!editingItem) {
+      return () => {}
+    }
+
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setReservationLink(editingItem.link ?? '')
+        setImageUrl(editingItem.image ?? '')
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [editingItem])
 
   async function handleLinkBlur() {
     if (!reservationLink || imageUrl) {

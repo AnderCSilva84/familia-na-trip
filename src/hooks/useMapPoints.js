@@ -105,6 +105,82 @@ function normalizePoint(item, sourceType, defaults = {}) {
   }
 }
 
+function normalizeLocationText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+function getReusablePlaceName(point) {
+  const title = normalizeLocationText(point.title)
+    .replace(/\s*[-–—]\s*(ida|volta|retorno|chegada|saida)\s*$/g, '')
+    .replace(/\s+(ida|volta|retorno)\s*$/g, '')
+    .trim()
+
+  if (!/(^|\s)(ap|apto|apartamento|airbnb|booking|hotel|pousada|hostel)(\s|$)/.test(title)) {
+    return ''
+  }
+
+  return title
+}
+
+function getLocationGroupKey(point) {
+  if (!point.date) {
+    return ''
+  }
+
+  const reusablePlaceName = getReusablePlaceName(point)
+  const coordinateKey =
+    Number.isFinite(point.latitude) && Number.isFinite(point.longitude)
+      ? `${point.latitude.toFixed(4)},${point.longitude.toFixed(4)}`
+      : ''
+  const textKey = normalizeLocationText(
+    point.mapQuery || point.address || point.location || `${point.local} ${point.city}`,
+  )
+  const locationKey = reusablePlaceName ? `place:${reusablePlaceName}` : coordinateKey || textKey
+
+  return locationKey ? `${formatDateKey(point.date)}|${locationKey}` : ''
+}
+
+function formatDateKey(value) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value).slice(0, 10) : date.toISOString().slice(0, 10)
+}
+
+function consolidateDuplicateLocations(points) {
+  const groups = new Map()
+
+  points.forEach((point) => {
+    const key = getLocationGroupKey(point)
+
+    if (!key) {
+      groups.set(`unique-${point.id}`, [point])
+      return
+    }
+
+    groups.set(key, [...(groups.get(key) ?? []), point])
+  })
+
+  return [...groups.values()].map((group) => {
+    if (group.length === 1) {
+      return group[0]
+    }
+
+    const primary = group.find((point) => point.sourceType === 'hotel') ?? group[0]
+    return {
+      ...primary,
+      id: `group-${group.map((point) => point.id).join('-')}`,
+      description: `${group.length} atividades neste local`,
+      pointCount: group.length,
+      relatedPoints: group,
+      isCurrentDay: group.some((point) => point.isCurrentDay),
+    }
+  })
+}
+
 function useMapPoints() {
   const trip = useAppStore((state) => state.trip)
   const { hotels } = useHotels()
@@ -143,7 +219,7 @@ function useMapPoints() {
       )
       .sort((left, right) => Number(right.isCurrentDay) - Number(left.isCurrentDay))
 
-    return [
+    return consolidateDuplicateLocations([
       ...agendaPoints,
       ...hotels
         .map((hotel, index) =>
@@ -173,7 +249,7 @@ function useMapPoints() {
           normalizePoint(item, 'roteiro', fallbackPositions[(index + 5) % fallbackPositions.length]),
         ),
       ...customPoints.map((point) => normalizePoint(point, point.sourceType || 'ponto')),
-    ]
+    ])
   }, [agenda, customPoints, emergencyContacts, hotels, itinerary, tips, usingMockData, vehicles])
 }
 

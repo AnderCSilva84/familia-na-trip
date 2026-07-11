@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -20,6 +20,24 @@ function HotelFormPage() {
   const editingHotel = hotels.find((hotel) => hotel.id === hotelId)
   const [reservationLink, setReservationLink] = useState(editingHotel?.link ?? '')
   const [imageUrl, setImageUrl] = useState(editingHotel?.image ?? '')
+
+  useEffect(() => {
+    if (!editingHotel) {
+      return () => {}
+    }
+
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setReservationLink(editingHotel.link ?? '')
+        setImageUrl(editingHotel.image ?? '')
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [editingHotel])
 
   async function handleLinkBlur() {
     if (!reservationLink || imageUrl) {

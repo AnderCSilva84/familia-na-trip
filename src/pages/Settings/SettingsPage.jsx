@@ -251,6 +251,13 @@ function SettingsPage() {
         <h3 className="text-base font-semibold text-slate-950">Atalhos da viagem</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <Link
+            to="/today"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <p className="font-semibold text-slate-900">Hoje</p>
+            <p className="mt-1 text-slate-500">Agenda, documentos e pendencias essenciais do dia.</p>
+          </Link>
+          <Link
             to="/notifications"
             className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
           >
@@ -279,11 +286,39 @@ function SettingsPage() {
             <p className="mt-1 text-slate-500">Lembretes ativos e proximos avisos da viagem.</p>
           </Link>
           <Link
+            to="/wallet"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <p className="font-semibold text-slate-900">Carteira</p>
+            <p className="mt-1 text-slate-500">PDFs de reservas, check-ins, passagens e outros documentos.</p>
+          </Link>
+          <Link
+            to="/hotels"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <p className="font-semibold text-slate-900">Hospedagens</p>
+            <p className="mt-1 text-slate-500">Reservas, periodos de estadia e sincronizacao com a agenda.</p>
+          </Link>
+          <Link
+            to="/checklist"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <p className="font-semibold text-slate-900">Checklist e malas</p>
+            <p className="mt-1 text-slate-500">Divida preparativos e confira as malas de toda a familia.</p>
+          </Link>
+          <Link
             to="/emergency"
             className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
           >
             <p className="font-semibold text-slate-900">Emergencia</p>
             <p className="mt-1 text-slate-500">Hospitais, pronto-atendimento e apoio rapido no mapa.</p>
+          </Link>
+          <Link
+            to="/medical"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-rose-50"
+          >
+            <p className="font-semibold text-slate-900">Cartao medico</p>
+            <p className="mt-1 text-slate-500">Alergias, medicamentos, plano e contato de emergencia.</p>
           </Link>
         </div>
       </Card>

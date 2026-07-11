@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -106,6 +107,8 @@ export async function createHotelReservation(data) {
         date: payload.checkIn,
         startTime: '14:00',
         location: payload.address,
+        image: payload.image,
+        link: payload.link,
         type: 'hotel',
         relatedId: hotelRef.id,
         createdBy: payload.createdBy,
@@ -117,6 +120,8 @@ export async function createHotelReservation(data) {
         date: payload.checkOut,
         startTime: '12:00',
         location: payload.address,
+        image: payload.image,
+        link: payload.link,
         type: 'hotel',
         relatedId: hotelRef.id,
         createdBy: payload.createdBy,
@@ -167,9 +172,17 @@ export function subscribeHotelsByTrip(tripId, callback, onError) {
 
 export async function updateHotelReservation(id, data) {
   const hotelRef = doc(hotelsCollection(), id)
-  const locationData = await enrichHotelLocationData(data)
-  await updateDoc(hotelRef, {
+  const currentSnapshot = await getDoc(hotelRef)
+  const currentData = currentSnapshot.exists() ? currentSnapshot.data() : {}
+  const mergedData = {
+    ...currentData,
     ...data,
+    image: data.image || currentData.image || '',
+    link: data.link || currentData.link || '',
+  }
+  const locationData = await enrichHotelLocationData(mergedData)
+  const payload = {
+    ...mergedData,
     estimatedValue: Number(data.estimatedValue ?? 0),
     finalValue: Number(data.finalValue ?? 0),
     mapX: locationData.mapX,
@@ -178,7 +191,8 @@ export async function updateHotelReservation(id, data) {
     latitude: locationData.latitude,
     longitude: locationData.longitude,
     updatedAt: serverTimestamp(),
-  })
+  }
+  await updateDoc(hotelRef, payload)
 }
 
 export async function deleteHotelReservation(id) {

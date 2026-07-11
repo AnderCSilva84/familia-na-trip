@@ -41,6 +41,10 @@ const pageMeta = [
   { match: '/emergency/new', title: 'Novo hospital', subtitle: 'Cadastre apoio rapido para emergencias da viagem' },
   { match: '/emergency/', title: 'Editar hospital', subtitle: 'Atualize endereco, publico e destaque' },
   { match: '/emergency', title: 'Emergencia', subtitle: 'Hospitais e apoio rapido no mapa da viagem' },
+  { match: '/wallet', title: 'Carteira', subtitle: 'Reservas, check-ins e documentos da viagem' },
+  { match: '/checklist', title: 'Checklist e malas', subtitle: 'Preparativos compartilhados pela familia' },
+  { match: '/today', title: 'Hoje', subtitle: 'O essencial do dia em uma tela' },
+  { match: '/medical', title: 'Cartao medico', subtitle: 'Informacoes protegidas para emergencias' },
   { match: '/settings', title: 'Configuracoes', subtitle: 'Perfil, tema e dados da trip' },
 ]
 

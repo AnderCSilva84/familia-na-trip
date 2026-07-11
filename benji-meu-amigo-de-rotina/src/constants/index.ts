@@ -1,0 +1,4 @@
+import {Bath,BookOpen,Calculator,Gamepad2,Moon,Pencil,PersonStanding,Utensils,Boxes,Heart} from 'lucide-react'
+export const categories=[['autocuidado','Autocuidado',Bath],['alimentacao','Alimentação',Utensils],['estudo','Estudo',BookOpen],['leitura','Leitura',BookOpen],['matematica','Matemática',Calculator],['escrita','Escrita',Pencil],['brincadeira','Brincadeira',Gamepad2],['organizacao','Organização',Boxes],['descanso','Descanso',Moon],['sono','Sono',Moon],['atividade-fisica','Atividade física',PersonStanding],['personalizada','Tarefa personalizada',Heart]] as const
+export const defaultSettings={soundEnabled:false,voiceEnabled:true,animationLevel:'reduced',celebrationMode:'calm',highContrast:false,largeButtons:true,reducedMotion:false,showTimers:false,speechRate:.9} as const
+export const friendlyError='Não conseguimos fazer isso agora. Peça ajuda a um adulto.'

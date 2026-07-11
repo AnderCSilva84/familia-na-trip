@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   FiBell,
-  FiBookOpen,
+  FiFileText,
   FiCheckCircle,
+  FiCheckSquare,
   FiCalendar,
   FiCreditCard,
   FiMapPin,
+  FiHeart,
+  FiHome,
   FiPlus,
-  FiUsers,
+  FiSun,
   FiX,
 } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
@@ -37,16 +40,21 @@ import {
 } from '../../utils/formatters'
 
 const shortcuts = [
+  { to: '/today', label: 'Hoje', icon: FiSun },
   { to: '/map', label: 'Mapa', icon: FiMapPin },
   { to: '/itinerary', label: 'Roteiro', icon: FiCalendar },
-  { to: '/diary', label: 'Diario', icon: FiBookOpen },
+  { to: '/wallet', label: 'Carteira', icon: FiFileText },
+  { to: '/hotels', label: 'Hospedagens', icon: FiHome },
+  { to: '/checklist', label: 'Checklist e malas', icon: FiCheckSquare },
   { to: '/expenses', label: 'Gastos', icon: FiCreditCard },
-  { to: '/members', label: 'Membros', icon: FiUsers },
   { to: '/emergency', label: 'Emergencia', icon: FiPlus, iconClassName: 'text-rose-600' },
+  { to: '/medical', label: 'Cartao medico', icon: FiHeart, iconClassName: 'text-rose-600' },
 ]
 
 const TRIP_COUNTDOWN_TARGET = '2026-07-18T00:00:00-03:00'
 const TRIP_START_DATE = '2026-07-18'
+const TRIP_END_DATE = '2026-07-29'
+const TRIP_TOTAL_DAYS = 12
 const FAMILY_SPLIT_COUNT = 5
 const dashboardTypeLabels = {
   evento: 'Evento',
@@ -278,6 +286,11 @@ function DashboardPage() {
       minutes,
     }
   }, [countdownNow])
+  const tripPhase = todayString < TRIP_START_DATE
+    ? 'before'
+    : todayString <= TRIP_END_DATE
+      ? 'during'
+      : 'after'
 
   async function handlePlanningSave() {
     if (!planningEvent || !canManageEventCosts) {
@@ -370,9 +383,9 @@ function DashboardPage() {
               Ola, {displayName}!
             </p>
             <h2 className="mt-2 max-w-[12ch] text-[2rem] font-semibold leading-[0.98] tracking-tight text-amber-800 drop-shadow-[0_1px_2px_rgba(255,255,255,0.32)] sm:max-w-none sm:text-2xl lg:text-3xl">
-              Tudo pronto para a proxima parada?
+              {tripPhase === 'before' ? 'Tudo pronto para a proxima parada?' : tripPhase === 'during' ? 'Estamos vivendo essa aventura!' : 'As melhores lembrancas ficam para sempre.'}
             </h2>
-            <div className="summer-countdown summer-countdown__card mx-auto mt-4 w-full max-w-[29rem] rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,247,214,0.92)_0%,rgba(255,250,233,0.84)_22%,rgba(240,253,250,0.78)_100%)] p-4 shadow-[0_18px_34px_rgba(245,158,11,0.16)] sm:max-w-none sm:p-5">
+            {tripPhase === 'before' ? <div className="summer-countdown summer-countdown__card mx-auto mt-4 w-full max-w-[29rem] rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,247,214,0.92)_0%,rgba(255,250,233,0.84)_22%,rgba(240,253,250,0.78)_100%)] p-4 shadow-[0_18px_34px_rgba(245,158,11,0.16)] sm:max-w-none sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">
@@ -380,7 +393,7 @@ function DashboardPage() {
                   </p>
                 </div>
                 <Badge tone="accent" className="mx-auto w-fit sm:mx-0">
-                  {tripCountdown.isStarted ? 'chegou o dia' : 'partiu viagem'}
+                  partiu viagem
                 </Badge>
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
@@ -402,7 +415,19 @@ function DashboardPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </div> : null}
+            {tripPhase === 'during' ? <div className="mx-auto mt-4 w-full rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(240,253,250,0.94),rgba(204,251,241,0.86))] p-5 text-center shadow-[0_18px_34px_rgba(15,118,110,0.14)]">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-teal-700">A viagem comecou!</p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight text-teal-950">Dia {daysTogether} da nossa aventura</p>
+              <p className="mt-2 text-sm text-teal-700">Aproveitem cada parada e guardem muitas memorias juntos.</p>
+              <Link to="/today" className="mt-4 inline-flex rounded-2xl bg-teal-700 px-5 py-3 text-sm font-semibold text-white shadow-lg">Ver o resumo de hoje</Link>
+            </div> : null}
+            {tripPhase === 'after' ? <div className="mx-auto mt-4 w-full rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,247,237,0.95),rgba(254,240,138,0.74))] p-5 text-center shadow-[0_18px_34px_rgba(245,158,11,0.14)]">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">Ferias inesqueciveis</p>
+              <p className="mt-2 text-3xl font-semibold tracking-tight text-amber-950">Que viagem incrivel!</p>
+              <p className="mt-2 text-sm text-amber-800">Foram {TRIP_TOTAL_DAYS} dias juntos. Agora as melhores lembrancas continuam por aqui.</p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2"><Link to="/diary" className="rounded-2xl bg-amber-700 px-5 py-3 text-sm font-semibold text-white shadow-lg">Rever memorias</Link><Link to="/expenses" className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm">Resumo da viagem</Link></div>
+            </div> : null}
           </div>
         </div>
       </Card>
@@ -489,13 +514,13 @@ function DashboardPage() {
             Ver menu
           </Link>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
           {shortcuts.map(({ to, label, icon: Icon, iconClassName = 'text-teal-700' }) => (
-            <Link key={to} to={to} className="rounded-3xl bg-slate-50 p-4 text-center transition hover:bg-teal-50">
+            <Link key={to} to={to} className="min-w-0 rounded-3xl bg-slate-50 px-2 py-4 text-center transition hover:bg-teal-50 sm:p-4">
               <div className={`mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm ${iconClassName}`}>
                 <Icon size={18} />
               </div>
-              <p className="mt-3 text-sm font-medium text-slate-700">{label}</p>
+              <p className="mt-3 break-words text-sm font-medium leading-5 text-slate-700">{label}</p>
             </Link>
           ))}
         </div>

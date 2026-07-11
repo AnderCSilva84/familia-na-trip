@@ -35,6 +35,10 @@ const SettingsPage = lazy(() => import('../pages/Settings/SettingsPage'))
 const ReviewsPage = lazy(() => import('../pages/Reviews/ReviewsPage'))
 const EmergencyPage = lazy(() => import('../pages/Emergency/EmergencyPage'))
 const EmergencyFormPage = lazy(() => import('../pages/Emergency/EmergencyFormPage'))
+const WalletPage = lazy(() => import('../pages/Wallet/WalletPage'))
+const ChecklistPage = lazy(() => import('../pages/Checklist/ChecklistPage'))
+const TodayPage = lazy(() => import('../pages/Today/TodayPage'))
+const MedicalPage = lazy(() => import('../pages/Medical/MedicalPage'))
 
 function renderPage(Component) {
   return (
@@ -87,6 +91,10 @@ function AppRoutes() {
             <Route path="/emergency" element={renderPage(EmergencyPage)} />
             <Route path="/emergency/new" element={renderPage(EmergencyFormPage)} />
             <Route path="/emergency/:contactId/edit" element={renderPage(EmergencyFormPage)} />
+            <Route path="/wallet" element={renderPage(WalletPage)} />
+            <Route path="/checklist" element={renderPage(ChecklistPage)} />
+            <Route path="/today" element={renderPage(TodayPage)} />
+            <Route path="/medical" element={renderPage(MedicalPage)} />
             <Route path="/settings" element={renderPage(SettingsPage)} />
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={renderPage(AdminPanelPage)} />

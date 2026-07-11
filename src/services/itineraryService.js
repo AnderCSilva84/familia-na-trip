@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   query,
   serverTimestamp,
@@ -164,9 +165,17 @@ export function subscribeItineraryByTrip(tripId, callback, onError) {
 
 export async function updateItineraryItem(id, data) {
   const itemRef = doc(itineraryCollection(), id)
-  const locationData = await enrichItineraryLocationData(data)
-  await updateDoc(itemRef, {
+  const currentSnapshot = await getDoc(itemRef)
+  const currentData = currentSnapshot.exists() ? currentSnapshot.data() : {}
+  const payload = {
+    ...currentData,
     ...data,
+    image: data.image || currentData.image || '',
+    link: data.link || currentData.link || '',
+  }
+  const locationData = await enrichItineraryLocationData(payload)
+  await updateDoc(itemRef, {
+    ...payload,
     mapX: locationData.mapX,
     mapY: locationData.mapY,
     mapQuery: locationData.mapQuery,

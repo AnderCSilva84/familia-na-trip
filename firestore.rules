@@ -186,6 +186,24 @@ service cloud.firestore {
       allow update, delete: if canManageContent();
     }
 
+    match /walletDocuments/{documentId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
+    match /travelChecklist/{itemId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update: if isSignedIn();
+      allow delete: if canManageContent();
+    }
+
+    match /medicalProfiles/{userId} {
+      allow read, create, update: if isOwner(userId) || isSuperAdmin() || isAdmin();
+      allow delete: if isOwner(userId) || isSuperAdmin();
+    }
+
     match /vehicleRental/{vehicleId} {
       allow read: if canReadTripData();
       allow create: if canCreateContent();

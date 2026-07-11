@@ -170,16 +170,19 @@ function MapPage() {
     [items],
   )
   const visibleListItems = useMemo(
-    () => mapItems.filter((item) => !isPastDay(item.date)),
+    () =>
+      mapItems
+        .flatMap((item) => item.relatedPoints ?? [item])
+        .filter((item) => !isPastDay(item.date)),
     [mapItems],
   )
   const highlightedMemberLocation =
     memberLocations.find((location) => location.userId === selectedMemberLocationId) ?? null
   const highlighted =
     visibleListItems.find((item) => item.id === selectedPointId) ??
+    mapItems.find((item) => item.id === selectedPointId) ??
     visibleListItems.find((item) => item.isCurrentDay) ??
     visibleListItems[0] ??
-    mapItems.find((item) => item.id === selectedPointId) ??
     mapItems[0] ??
     items[0]
   const mapFocusTarget = highlightedMemberLocation ?? highlighted
@@ -428,7 +431,9 @@ function MapPage() {
                     }}
                   />
                   {mapItems.map((item) => {
-                    const isActive = item.id === highlighted?.id
+                    const isActive =
+                      item.id === highlighted?.id ||
+                      (item.relatedPoints ?? []).some((relatedPoint) => relatedPoint.id === highlighted?.id)
 
                     return (
                       <CircleMarker
@@ -449,6 +454,18 @@ function MapPage() {
                           <div className="space-y-1">
                             <p className="font-semibold">{item.title}</p>
                             <p>{item.mapQuery || item.description}</p>
+                            {item.pointCount > 1 ? (
+                              <div className="mt-2 border-t border-slate-100 pt-2">
+                                <p className="text-xs font-semibold uppercase text-teal-700">
+                                  {item.pointCount} atividades neste local
+                                </p>
+                                {(item.relatedPoints ?? []).map((relatedPoint) => (
+                                  <p key={relatedPoint.id} className="mt-1 text-sm">
+                                    {relatedPoint.startTime ? `${relatedPoint.startTime} · ` : ''}{relatedPoint.title}
+                                  </p>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         </Popup>
                       </CircleMarker>
@@ -513,17 +530,17 @@ function MapPage() {
           </div>
 
           {highlighted ? (
-            <Card className="flex items-start gap-3">
+            <Card className="space-y-3">
                 <AppImage
                   src={highlighted.image}
                   alt={highlighted.title}
-                  className="h-20 w-20 shrink-0 rounded-2xl object-cover"
-                  fallbackClassName="h-20 w-20 shrink-0 rounded-2xl bg-teal-50 text-2xl text-teal-700"
+                  className="h-44 w-full rounded-[28px] object-cover"
+                  fallbackClassName="h-44 w-full rounded-[28px] bg-teal-50 text-2xl text-teal-700"
                   fallbackLabel="P"
                 />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="min-w-0 flex-1 text-base font-semibold leading-tight text-slate-950">
+                <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 break-words text-base font-semibold text-slate-950">
                       {highlighted.title}
                     </h3>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
@@ -543,10 +560,24 @@ function MapPage() {
                       Localidade atual da agenda de hoje
                     </p>
                   ) : null}
+                  {highlighted.pointCount > 1 ? (
+                    <div className="mt-3 rounded-2xl bg-teal-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
+                        {highlighted.pointCount} atividades agrupadas neste local
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {(highlighted.relatedPoints ?? []).map((relatedPoint) => (
+                          <p key={relatedPoint.id} className="text-sm text-slate-700">
+                            {relatedPoint.startTime ? `${relatedPoint.startTime} · ` : ''}{relatedPoint.title}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <p className="mt-3 text-sm font-semibold text-teal-700">
                     Origem: {sourceTypeLabels[highlighted.sourceType] ?? highlighted.sourceType ?? 'Mapa'}
                   </p>
-                  <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Button
                       as={googleMapsUrl ? 'a' : 'button'}
                       href={googleMapsUrl || undefined}
