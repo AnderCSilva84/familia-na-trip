@@ -1,4 +1,4 @@
-import { FiCalendar, FiGrid, FiHome, FiMap, FiMenu } from 'react-icons/fi'
+import { FiCalendar, FiHome, FiMap, FiMenu } from 'react-icons/fi'
 import { NavLink } from 'react-router-dom'
 import useAlarms from '../../hooks/useAlarms'
 import useNotifications from '../../hooks/useNotifications'
@@ -6,7 +6,6 @@ import useNotifications from '../../hooks/useNotifications'
 const items = [
   { to: '/dashboard', label: 'Inicio', icon: FiHome },
   { to: '/map', label: 'Mapa', icon: FiMap },
-  { to: '/diary/new', label: 'Acoes', icon: FiGrid },
   { to: '/agenda', label: 'Agenda', icon: FiCalendar },
   { to: '/settings', label: 'Menu', icon: FiMenu },
 ]
@@ -34,8 +33,8 @@ function BottomNavigation({ variant = 'mobile' }) {
           : 'safe-bottom fixed bottom-4 left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-white/80 bg-white/95 px-3 py-3 shadow-[0_20px_60px_rgba(15,118,110,0.18)] backdrop-blur-xl lg:hidden'
       }
     >
-      <ul className={isDesktop ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-5 gap-2'}>
-        {items.map(({ to, label, icon: Icon }, index) => (
+      <ul className={isDesktop ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-4 gap-2'}>
+        {items.map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <NavLink
               to={to}
@@ -54,7 +53,7 @@ function BottomNavigation({ variant = 'mobile' }) {
                   </span>
                 ) : null}
               </span>
-              {!isDesktop ? <span className={index === 2 ? 'sr-only' : ''}>{label}</span> : <span className="text-xs text-slate-400">abrir</span>}
+              {!isDesktop ? <span>{label}</span> : <span className="text-xs text-slate-400">abrir</span>}
             </NavLink>
           </li>
         ))}

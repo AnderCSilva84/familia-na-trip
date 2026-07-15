@@ -58,7 +58,7 @@ function useNotifications() {
     )
 
     return unsubscribe
-  }, [trip?.id, userProfile, userProfile?.uid, usingMockData])
+  }, [trip?.id, userProfile, usingMockData])
 
   async function refresh() {
     if (!trip?.id || !userProfile?.uid) {

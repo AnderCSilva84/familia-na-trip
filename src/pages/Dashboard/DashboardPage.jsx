@@ -6,9 +6,11 @@ import {
   FiCheckSquare,
   FiCalendar,
   FiCreditCard,
-  FiMapPin,
+  FiCloud,
+  FiCloudRain,
   FiHeart,
   FiHome,
+  FiGift,
   FiPlus,
   FiSun,
   FiX,
@@ -29,6 +31,7 @@ import useDiary from '../../hooks/useDiary'
 import useExpenses from '../../hooks/useExpenses'
 import useMembers from '../../hooks/useMembers'
 import useNotifications from '../../hooks/useNotifications'
+import { getDestinationWeather } from '../../services/weatherService'
 import { getCatRatingMeta } from '../../utils/catRating'
 import { compareEventChronology } from '../../utils/eventDefaults'
 import { canEditAnyContent, canManageMembers, canPromoteAdmins } from '../../utils/permissions'
@@ -41,11 +44,11 @@ import {
 
 const shortcuts = [
   { to: '/today', label: 'Hoje', icon: FiSun },
-  { to: '/map', label: 'Mapa', icon: FiMapPin },
   { to: '/itinerary', label: 'Roteiro', icon: FiCalendar },
   { to: '/wallet', label: 'Carteira', icon: FiFileText },
   { to: '/hotels', label: 'Hospedagens', icon: FiHome },
   { to: '/checklist', label: 'Checklist e malas', icon: FiCheckSquare },
+  { to: '/souvenirs', label: 'Lembrancas', icon: FiGift },
   { to: '/expenses', label: 'Gastos', icon: FiCreditCard },
   { to: '/emergency', label: 'Emergencia', icon: FiPlus, iconClassName: 'text-rose-600' },
   { to: '/medical', label: 'Cartao medico', icon: FiHeart, iconClassName: 'text-rose-600' },
@@ -128,6 +131,9 @@ function DashboardPage() {
   const [reviewCommentText, setReviewCommentText] = useState('')
   const [reviewFeedback, setReviewFeedback] = useState('')
   const [countdownNow, setCountdownNow] = useState(() => Date.now())
+  const [weather, setWeather] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+  const [weatherError, setWeatherError] = useState('')
   const selectedMember = members.find((member) => member.id === selectedMemberId) ?? null
   const selectedReview = reviews.find((review) => review.id === selectedReviewId) ?? null
   const canManageSelectedMember = canManageMembers(userProfile)
@@ -232,6 +238,57 @@ function DashboardPage() {
   }, [agenda, nowDate, todayString])
 
   const nextEvent = nextThreeEvents[0] ?? null
+  const nextWeatherEvent = useMemo(
+    () =>
+      [...agenda]
+        .sort(compareEventChronology)
+        .find((item) => {
+          const eventDateTime = getEventDateTime(item)
+          const hasLocation = item.city || item.location || item.local || item.address || item.mapQuery
+          return hasLocation && eventDateTime && eventDateTime.getTime() >= nowDate.getTime()
+        }) ?? null,
+    [agenda, nowDate],
+  )
+  const weatherDestination = useMemo(() => {
+    if (!nextWeatherEvent) return trip?.destination || ''
+
+    return (
+      nextWeatherEvent.city ||
+      nextWeatherEvent.location ||
+      nextWeatherEvent.local ||
+      nextWeatherEvent.address ||
+      nextWeatherEvent.mapQuery ||
+      trip?.destination ||
+      ''
+    )
+  }, [nextWeatherEvent, trip?.destination])
+  const weatherTargetDate = formatDateInput(nextWeatherEvent?.date)
+
+  useEffect(() => {
+    if (!weatherDestination) return undefined
+
+    const controller = new AbortController()
+    queueMicrotask(() => {
+      if (!controller.signal.aborted) setWeatherLoading(true)
+    })
+
+    getDestinationWeather(weatherDestination, weatherTargetDate, controller.signal)
+      .then((result) => {
+        setWeather(result)
+        setWeatherError('')
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          setWeather(null)
+          setWeatherError(error.message)
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setWeatherLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [weatherDestination, weatherTargetDate])
 
   function openPlanningCard(eventItem = nextEvent) {
     if (!eventItem) {
@@ -430,6 +487,68 @@ function DashboardPage() {
             </div> : null}
           </div>
         </div>
+      </Card>
+
+      <Card className="overflow-hidden border-0 bg-[linear-gradient(135deg,#0f766e_0%,#0891b2_100%)] text-white shadow-lg">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-100">Clima da proxima parada</p>
+            <h3 className="mt-1 truncate text-lg font-semibold">{weather?.place || weatherDestination || 'Destino nao informado'}</h3>
+            {nextWeatherEvent ? (
+              <p className="mt-1 text-sm text-cyan-100">
+                {nextWeatherEvent.title} · {formatDisplayDate(nextWeatherEvent.date)}
+                {nextWeatherEvent.startTime ? ` as ${normalizeDisplayTime(nextWeatherEvent.startTime)}` : ''}
+              </p>
+            ) : null}
+            {weatherLoading ? <p className="mt-3 text-sm text-cyan-50">Consultando a previsao...</p> : null}
+            {!weatherLoading && (weatherError || !weatherDestination) ? <p className="mt-3 text-sm text-cyan-50">{weatherError || 'Informe o local da proxima parada para ver o clima.'}</p> : null}
+            {!weatherLoading && weather && weatherDestination ? (
+              <>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[24px] bg-white/12 p-4 ring-1 ring-white/15">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">Agora na proxima parada</p>
+                    <div className="mt-2 flex items-end gap-3">
+                      <span className="text-4xl font-semibold tracking-tight">{weather.currentTemperature}°</span>
+                      <div className="pb-1">
+                        <p className="font-semibold">{weather.currentCondition}</p>
+                        <p className="text-xs text-cyan-100">Sensacao de {weather.apparentTemperature}°</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] bg-white/12 p-4 ring-1 ring-white/15">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">Na data da chegada</p>
+                    {weather.isArrivalForecast ? (
+                      <>
+                        <div className="mt-2 flex items-end gap-3">
+                          <span className="text-4xl font-semibold tracking-tight">{weather.maximum}°</span>
+                          <div className="pb-1">
+                            <p className="font-semibold">{weather.condition}</p>
+                            <p className="text-xs text-cyan-100">Maxima prevista</p>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-xs text-cyan-50">Min. {weather.minimum}° · Chuva: {weather.rainChance}%</p>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-cyan-50">Previsao ainda indisponivel para esta data.</p>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-cyan-50">
+                  <span>Vento: {weather.windSpeed} km/h</span>
+                </div>
+              </>
+            ) : null}
+          </div>
+          <div className="shrink-0 rounded-[28px] bg-white/15 p-5 shadow-inner">
+            {weather?.rainChance >= 40 ? <FiCloudRain size={48} aria-hidden="true" /> : <FiCloud size={48} aria-hidden="true" />}
+          </div>
+        </div>
+        {!weatherLoading && weather && !weather.isArrivalForecast && weatherTargetDate ? (
+          <p className="mt-3 rounded-2xl bg-white/10 px-3 py-2 text-xs text-cyan-50">
+            A data da chegada ainda esta fora da janela de previsao. Exibindo o clima atual como referencia.
+          </p>
+        ) : null}
+        <p className="mt-3 text-[11px] text-cyan-100">Dados meteorologicos: Open-Meteo</p>
       </Card>
 
       <Card>

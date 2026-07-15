@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FiEdit3, FiMap, FiNavigation, FiSave, FiX } from 'react-icons/fi'
+import { FiEdit3, FiFilter, FiMap, FiNavigation, FiSave, FiX } from 'react-icons/fi'
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import Avatar from '../../components/common/Avatar'
@@ -59,6 +59,14 @@ function isPastDay(dateValue) {
   }
 
   return formatDateInput(dateValue) < new Date().toISOString().slice(0, 10)
+}
+
+function normalizeFilterText(value) {
+  return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+}
+
+function getPointCity(point) {
+  return String(point.city || point.location || point.mapQuery || point.address || '').trim()
 }
 
 const sourceTypeLabels = {
@@ -149,6 +157,8 @@ function MapPage() {
   const items = useMapPoints()
   const [selectedPointId, setSelectedPointId] = useState('')
   const [selectedMemberLocationId, setSelectedMemberLocationId] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [cityFilter, setCityFilter] = useState('')
   const [editingLocation, setEditingLocation] = useState(false)
   const [savingLocation, setSavingLocation] = useState(false)
   const [locationFeedback, setLocationFeedback] = useState('')
@@ -169,22 +179,37 @@ function MapPage() {
     () => items.filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude)),
     [items],
   )
+  const cityOptions = useMemo(() => {
+    const cities = items.flatMap((item) => item.relatedPoints ?? [item]).map(getPointCity).filter(Boolean)
+    return [...new Map(cities.map((city) => [normalizeFilterText(city), city])).values()].sort((a, b) =>
+      a.localeCompare(b, 'pt-BR'),
+    )
+  }, [items])
+  const filteredMapItems = useMemo(() => mapItems.flatMap((item) => {
+    const points = (item.relatedPoints ?? [item]).filter((point) => {
+      const matchesDate = !dateFilter || formatDateInput(point.date) === dateFilter
+      const matchesCity = !cityFilter || normalizeFilterText(getPointCity(point)) === normalizeFilterText(cityFilter)
+      return matchesDate && matchesCity
+    })
+    if (!points.length) return []
+    if (!item.relatedPoints) return [item]
+    return [{ ...item, ...points[0], id: item.id, relatedPoints: points, pointCount: points.length }]
+  }), [cityFilter, dateFilter, mapItems])
   const visibleListItems = useMemo(
     () =>
-      mapItems
+      filteredMapItems
         .flatMap((item) => item.relatedPoints ?? [item])
         .filter((item) => !isPastDay(item.date)),
-    [mapItems],
+    [filteredMapItems],
   )
   const highlightedMemberLocation =
     memberLocations.find((location) => location.userId === selectedMemberLocationId) ?? null
   const highlighted =
     visibleListItems.find((item) => item.id === selectedPointId) ??
-    mapItems.find((item) => item.id === selectedPointId) ??
+    filteredMapItems.find((item) => item.id === selectedPointId) ??
     visibleListItems.find((item) => item.isCurrentDay) ??
     visibleListItems[0] ??
-    mapItems[0] ??
-    items[0]
+    filteredMapItems[0]
   const mapFocusTarget = highlightedMemberLocation ?? highlighted
   const googleMapsUrl = highlighted ? buildGoogleMapsUrl(highlighted) : ''
   const wazeUrl = highlighted ? buildWazeUrl(highlighted) : ''
@@ -411,9 +436,33 @@ function MapPage() {
     <div className="space-y-4">
       <Card className="overflow-hidden p-0">
         <div className="space-y-4 bg-[linear-gradient(180deg,#d8f3dc_0%,#effbf6_100%)] p-4">
+          <Card className="space-y-3 bg-white/90">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FiFilter className="text-teal-700" />
+                <h2 className="font-semibold text-slate-950">Filtrar pontos do mapa</h2>
+              </div>
+              {dateFilter || cityFilter ? (
+                <button type="button" onClick={() => { setDateFilter(''); setCityFilter('') }} className="text-sm font-semibold text-teal-700">
+                  Limpar filtros
+                </button>
+              ) : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input label="Data" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                <span>Cidade</span>
+                <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <option value="">Todas as cidades</option>
+                  {cityOptions.map((city) => <option key={city} value={city}>{city}</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="text-xs text-slate-500">{filteredMapItems.length} local{filteredMapItems.length === 1 ? '' : 'is'} encontrado{filteredMapItems.length === 1 ? '' : 's'}.</p>
+          </Card>
           <div ref={mapViewportRef} className="overflow-hidden rounded-[32px] border border-white/70">
             <div className="h-[420px] w-full">
-              {mapItems.length > 0 ? (
+              {filteredMapItems.length > 0 || memberLocations.length > 0 ? (
                 <MapContainer center={mapCenter} zoom={13} className="h-full w-full">
                   <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -430,7 +479,7 @@ function MapPage() {
                       }))
                     }}
                   />
-                  {mapItems.map((item) => {
+                  {filteredMapItems.map((item) => {
                     const isActive =
                       item.id === highlighted?.id ||
                       (item.relatedPoints ?? []).some((relatedPoint) => relatedPoint.id === highlighted?.id)

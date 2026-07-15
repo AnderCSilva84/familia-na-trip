@@ -58,13 +58,32 @@ function SettingsPage() {
       previewUrlRef.current = ''
     }
 
-    setSelectedPhoto(nextFile)
-
     if (!nextFile) {
+      setSelectedPhoto(null)
       setPhotoPreview('')
       return
     }
 
+    if (!String(nextFile.type ?? '').startsWith('image/')) {
+      event.target.value = ''
+      setSelectedPhoto(null)
+      setPhotoPreview('')
+      setFeedbackTone('error')
+      setFeedback('Escolha um arquivo de imagem valido.')
+      return
+    }
+
+    if (nextFile.size > 15 * 1024 * 1024) {
+      event.target.value = ''
+      setSelectedPhoto(null)
+      setPhotoPreview('')
+      setFeedbackTone('error')
+      setFeedback('A foto deve ter no maximo 15 MB. Reduza a imagem e tente novamente.')
+      return
+    }
+
+    setSelectedPhoto(nextFile)
+    setFeedback('')
     const objectUrl = URL.createObjectURL(nextFile)
     previewUrlRef.current = objectUrl
     setPhotoPreview(objectUrl)
@@ -305,6 +324,13 @@ function SettingsPage() {
           >
             <p className="font-semibold text-slate-900">Checklist e malas</p>
             <p className="mt-1 text-slate-500">Divida preparativos e confira as malas de toda a familia.</p>
+          </Link>
+          <Link
+            to="/souvenirs"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-amber-50"
+          >
+            <p className="font-semibold text-slate-900">Lista de lembrancas</p>
+            <p className="mt-1 text-slate-500">Anote o presente, para quem foi e marque quando estiver entregue.</p>
           </Link>
           <Link
             to="/emergency"

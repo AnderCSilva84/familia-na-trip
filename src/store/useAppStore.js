@@ -52,18 +52,25 @@ const useAppStore = create((set) => ({
 
         return {
           loadingAuth: false,
-          authError: state.authError || 'A inicializacao demorou mais do que o esperado. Voce ja pode entrar manualmente.',
+          authError:
+            state.authError ||
+            (state.currentUser
+              ? 'A viagem ainda esta sincronizando. Alguns dados podem aparecer em instantes.'
+              : 'A inicializacao demorou mais do que o esperado. Voce ja pode entrar manualmente.'),
         }
       })
-    }, 4000)
+    }, 12000)
 
-    const unsubscribe = listenAuthChanges(async (user) => {
+    const finishAuthBoot = () => {
       if (authBootTimeout) {
         window.clearTimeout(authBootTimeout)
         authBootTimeout = null
       }
+    }
 
+    const unsubscribe = listenAuthChanges(async (user) => {
       if (!user) {
+        finishAuthBoot()
         set({
           currentUser: null,
           userProfile: null,
@@ -92,17 +99,21 @@ const useAppStore = create((set) => ({
           ? await getTripById(membershipTripId)
           : await ensureDefaultTripForUser(userProfile)
 
-        if (trip?.id) {
-          await ensureMembershipForTrip(trip, userProfile)
-        }
-
         set({
           userProfile,
           trip,
           pendingInvites: [],
           loadingAuth: false,
         })
+        finishAuthBoot()
+
+        if (trip?.id) {
+          ensureMembershipForTrip(trip, userProfile).catch((membershipError) => {
+            console.warn('A viagem foi carregada, mas o vinculo do usuario nao foi sincronizado.', membershipError)
+          })
+        }
       } catch (error) {
+        finishAuthBoot()
         set({
           userProfile: null,
           loadingAuth: false,
@@ -110,6 +121,12 @@ const useAppStore = create((set) => ({
           trip: null,
         })
       }
+    }, (error) => {
+      finishAuthBoot()
+      set({
+        loadingAuth: false,
+        authError: error.message ?? 'Nao foi possivel verificar a sessao atual.',
+      })
     })
 
     authUnsubscribe = () => {

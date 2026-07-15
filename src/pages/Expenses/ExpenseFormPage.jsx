@@ -26,11 +26,12 @@ function ExpenseFormPage() {
   const { expenseId } = useParams()
   const { expenses, loading, error, createExpense, updateExpense, usingMockData } = useExpenses()
   const { members } = useMembers()
+  const editingExpense = expenses.find((expense) => expense.id === expenseId)
   const [selectedMembers, setSelectedMembers] = useState(null)
-  const [selectedType, setSelectedType] = useState(editingExpense?.type ?? 'efetivado')
+  const [selectedTypeOverride, setSelectedTypeOverride] = useState(null)
   const [feedback, setFeedback] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const editingExpense = expenses.find((expense) => expense.id === expenseId)
+  const selectedType = selectedTypeOverride ?? editingExpense?.type ?? 'efetivado'
   const dividedBetween = selectedMembers ?? editingExpense?.dividedBetween ?? []
 
   function toggleMember(memberName) {
@@ -131,7 +132,7 @@ function ExpenseFormPage() {
               <select
                 name="type"
                 value={selectedType}
-                onChange={(event) => setSelectedType(event.target.value)}
+                onChange={(event) => setSelectedTypeOverride(event.target.value)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
               >
                 <option value="estimado">estimado</option>

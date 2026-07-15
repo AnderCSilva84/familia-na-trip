@@ -37,6 +37,7 @@ const EmergencyPage = lazy(() => import('../pages/Emergency/EmergencyPage'))
 const EmergencyFormPage = lazy(() => import('../pages/Emergency/EmergencyFormPage'))
 const WalletPage = lazy(() => import('../pages/Wallet/WalletPage'))
 const ChecklistPage = lazy(() => import('../pages/Checklist/ChecklistPage'))
+const SouvenirsPage = lazy(() => import('../pages/Souvenirs/SouvenirsPage'))
 const TodayPage = lazy(() => import('../pages/Today/TodayPage'))
 const MedicalPage = lazy(() => import('../pages/Medical/MedicalPage'))
 
@@ -93,6 +94,7 @@ function AppRoutes() {
             <Route path="/emergency/:contactId/edit" element={renderPage(EmergencyFormPage)} />
             <Route path="/wallet" element={renderPage(WalletPage)} />
             <Route path="/checklist" element={renderPage(ChecklistPage)} />
+            <Route path="/souvenirs" element={renderPage(SouvenirsPage)} />
             <Route path="/today" element={renderPage(TodayPage)} />
             <Route path="/medical" element={renderPage(MedicalPage)} />
             <Route path="/settings" element={renderPage(SettingsPage)} />

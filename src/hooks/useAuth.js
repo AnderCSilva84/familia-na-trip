@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import useAppStore from '../store/useAppStore'
 import { loginWithEmail, logoutUser, registerWithEmail, requestPasswordReset } from '../services/authService'
 
@@ -11,17 +12,20 @@ function useAuth() {
   const pendingInvites = useAppStore((state) => state.pendingInvites)
   const clearAuth = useAppStore((state) => state.clearAuth)
   const setCurrentUser = useAppStore((state) => state.setCurrentUser)
-  const userProfile = {
-    uid: storedUserProfile?.uid ?? currentUser?.uid ?? '',
-    name: storedUserProfile?.name ?? currentUser?.displayName ?? 'Usuario',
-    email: storedUserProfile?.email ?? currentUser?.email ?? '',
-    photoURL: storedUserProfile?.photoURL ?? currentUser?.photoURL ?? '',
-    photoPath: storedUserProfile?.photoPath ?? '',
-    role: storedUserProfile?.role ?? 'member',
-    active: storedUserProfile?.active ?? true,
-    createdAt: storedUserProfile?.createdAt ?? null,
-    updatedAt: storedUserProfile?.updatedAt ?? null,
-  }
+  const userProfile = useMemo(
+    () => ({
+      uid: storedUserProfile?.uid ?? currentUser?.uid ?? '',
+      name: storedUserProfile?.name ?? currentUser?.displayName ?? 'Usuario',
+      email: storedUserProfile?.email ?? currentUser?.email ?? '',
+      photoURL: storedUserProfile?.photoURL ?? currentUser?.photoURL ?? '',
+      photoPath: storedUserProfile?.photoPath ?? '',
+      role: storedUserProfile?.role ?? 'member',
+      active: storedUserProfile?.active ?? true,
+      createdAt: storedUserProfile?.createdAt ?? null,
+      updatedAt: storedUserProfile?.updatedAt ?? null,
+    }),
+    [currentUser, storedUserProfile],
+  )
 
   async function login(email, password) {
     const user = await loginWithEmail(email, password)

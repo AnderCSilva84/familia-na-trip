@@ -74,7 +74,7 @@ function normalizePoint(item, sourceType, defaults = {}) {
     mapQuery: item.mapQuery || mapMetadata.mapQuery || '',
     latitude: Number.isFinite(latitude) ? latitude : null,
     longitude: Number.isFinite(longitude) ? longitude : null,
-    date: item.date ?? '',
+    date: item.date ?? item.checkIn ?? item.pickupDate ?? '',
     startTime: item.startTime ?? item.time ?? '',
     endTime: item.endTime ?? '',
     city: item.city ?? '',

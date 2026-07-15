@@ -52,6 +52,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: null,
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,

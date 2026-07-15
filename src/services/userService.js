@@ -172,23 +172,63 @@ export async function updateUserRole(uid, role) {
 export async function uploadUserProfilePhoto(uid, file, currentPhotoPath = '') {
   ensureFirebaseConfigured()
 
+  if (!uid) {
+    throw new Error('Nao foi possivel identificar o usuario conectado. Entre novamente e tente outra vez.')
+  }
+
   if (!storage) {
     throw new Error('Firebase Storage indisponivel.')
   }
 
-  const sanitizedName = String(file?.name ?? 'avatar.jpg').replace(/\s+/g, '-')
-  const filePath = `users/${uid}/profile/${Date.now()}-${sanitizedName}`
-  const fileRef = ref(storage, filePath)
-
-  await uploadBytes(fileRef, file)
-  const photoURL = await getDownloadURL(fileRef)
-
-  if (currentPhotoPath) {
-    await deleteObject(ref(storage, currentPhotoPath)).catch(() => null)
+  if (!file || !String(file.type ?? '').startsWith('image/')) {
+    throw new Error('Escolha um arquivo de imagem valido.')
   }
 
-  return {
-    photoURL,
-    photoPath: filePath,
+  const maximumPhotoSize = 15 * 1024 * 1024
+
+  if (file.size > maximumPhotoSize) {
+    throw new Error('A foto deve ter no maximo 15 MB. Reduza a imagem e tente novamente.')
+  }
+
+  const extensionByType = {
+    'image/gif': 'gif',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+  }
+  const extension = extensionByType[file.type] ?? 'img'
+  const filePath = `users/${uid}/profile/${Date.now()}-avatar.${extension}`
+  const fileRef = ref(storage, filePath)
+
+  try {
+    await uploadBytes(fileRef, file, { contentType: file.type })
+    const photoURL = await getDownloadURL(fileRef)
+
+    if (currentPhotoPath && currentPhotoPath !== filePath) {
+      await deleteObject(ref(storage, currentPhotoPath)).catch(() => null)
+    }
+
+    return {
+      photoURL,
+      photoPath: filePath,
+    }
+  } catch (error) {
+    if (error?.code === 'storage/unauthorized') {
+      throw new Error(
+        'Sua sessao nao tem permissao para enviar a foto. Entre novamente e tente outra vez.',
+        { cause: error },
+      )
+    }
+
+    if (error?.code === 'storage/retry-limit-exceeded' || error?.code === 'storage/canceled') {
+      throw new Error(
+        'O envio da foto foi interrompido. Verifique sua conexao e tente novamente.',
+        { cause: error },
+      )
+    }
+
+    throw error
   }
 }

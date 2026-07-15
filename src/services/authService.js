@@ -140,11 +140,11 @@ export function getCurrentUser() {
   return auth?.currentUser ?? null
 }
 
-export function listenAuthChanges(callback) {
+export function listenAuthChanges(callback, onError) {
   if (!auth) {
     callback(null)
     return () => {}
   }
 
-  return onAuthStateChanged(auth, callback)
+  return onAuthStateChanged(auth, callback, onError)
 }
