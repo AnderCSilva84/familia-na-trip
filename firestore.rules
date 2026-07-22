@@ -69,6 +69,20 @@ service cloud.firestore {
       return isSignedIn();
     }
 
+    function canCreateAgendaValues() {
+      return isAdmin() || (
+        request.resource.data.estimatedCost == 0
+        && request.resource.data.actualCost == 0
+      );
+    }
+
+    function canUpdateAgendaValues() {
+      return isAdmin() || (
+        request.resource.data.estimatedCost == resource.data.estimatedCost
+        && request.resource.data.actualCost == resource.data.actualCost
+      );
+    }
+
     function isSelfUserCreate(userId) {
       return isOwner(userId)
         && request.resource.data.uid == userId
@@ -151,7 +165,7 @@ service cloud.firestore {
       allow read: if canReadTripData();
       allow create: if isSuperAdmin() || isAdmin() || request.resource.data.userId == request.auth.uid;
       allow update: if isSuperAdmin() || isAdmin() || canSelfUpdateMember();
-      allow delete: if isSuperAdmin() || isAdmin();
+      allow delete: if isSuperAdmin() || isAdmin() || isContentOwner();
     }
 
     match /memberLocations/{userId} {
@@ -168,10 +182,21 @@ service cloud.firestore {
       allow update, delete: if canManageContent();
     }
 
+    match /attractions/{attractionId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update: if canManageContent() || (
+        isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visited', 'visitedBy', 'visitedAt', 'updatedAt'])
+      );
+      allow delete: if canManageContent();
+    }
+
     match /diary/{entryId} {
       allow read: if canReadTripData();
       allow create: if canCreateContent();
-      allow update, delete: if canManageContent();
+      allow update: if canManageContent();
+      allow delete: if isSuperAdmin() || isAdmin();
     }
 
     match /expenses/{expenseId} {
@@ -225,14 +250,22 @@ service cloud.firestore {
 
     match /agenda/{agendaId} {
       allow read: if canReadTripData();
-      allow create: if canCreateContent();
-      allow update, delete: if canManageContent();
+      allow create: if canCreateContent() && canCreateAgendaValues();
+      allow update: if canManageContent() && canUpdateAgendaValues();
+      allow delete: if canManageContent();
     }
 
     match /agendaReviews/{reviewId} {
       allow read: if canReadTripData();
-      allow create: if canCreateContent();
-      allow update: if isSignedIn();
+      allow create: if canCreateContent()
+        && request.resource.data.userId == request.auth.uid
+        && (isAdmin() || request.resource.data.actualCost == 0);
+      allow update: if isSignedIn()
+        && (isAdmin() || request.resource.data.actualCost == resource.data.actualCost)
+        && (
+          resource.data.userId == request.auth.uid
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'comments', 'updatedAt'])
+        );
       allow delete: if isSuperAdmin() || isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 

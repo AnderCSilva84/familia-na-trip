@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FiDownload, FiUsers } from 'react-icons/fi'
+import { FiDownload, FiPlus, FiUsers } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -68,6 +68,12 @@ function AdminPanelPage() {
           </Button>
           <Button variant="secondary" onClick={() => navigate('/agenda/new')}>
             Novo evento
+          </Button>
+          <Button variant="secondary" icon={<FiPlus />} onClick={() => navigate('/trips/new')}>
+            Cadastrar trip
+          </Button>
+          <Button variant="secondary" onClick={() => navigate('/trips')}>
+            Todas as viagens
           </Button>
         </div>
       </Card>

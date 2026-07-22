@@ -84,6 +84,14 @@ export async function getUserProfile(uid) {
   return mapProfile(uid, snapshot.data())
 }
 
+export async function getAllUserProfiles() {
+  const snapshot = await getDocs(usersCollection())
+  return snapshot.docs
+    .map((userDoc) => mapProfile(userDoc.id, userDoc.data()))
+    .filter((profile) => profile.active !== false)
+    .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'))
+}
+
 export async function getUserProfileByEmail(email) {
   const normalizedEmail = String(email ?? '').trim().toLowerCase()
 

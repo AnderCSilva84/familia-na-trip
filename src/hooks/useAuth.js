@@ -6,6 +6,9 @@ function useAuth() {
   const currentUser = useAppStore((state) => state.currentUser)
   const storedUserProfile = useAppStore((state) => state.userProfile)
   const trip = useAppStore((state) => state.trip)
+  const trips = useAppStore((state) => state.trips)
+  const setTrip = useAppStore((state) => state.setTrip)
+  const setTrips = useAppStore((state) => state.setTrips)
   const loadingAuth = useAppStore((state) => state.loadingAuth)
   const isAuthenticated = useAppStore((state) => state.isAuthenticated)
   const authError = useAppStore((state) => state.authError)
@@ -52,6 +55,9 @@ function useAuth() {
     currentUser,
     userProfile,
     trip,
+    trips,
+    setTrip,
+    setTrips,
     pendingInvites,
     loadingAuth,
     isAuthenticated,

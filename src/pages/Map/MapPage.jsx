@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FiEdit3, FiFilter, FiMap, FiNavigation, FiSave, FiX } from 'react-icons/fi'
+import { FiArrowLeft, FiEdit3, FiFilter, FiMap, FiNavigation, FiSave, FiX } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import Avatar from '../../components/common/Avatar'
@@ -72,11 +73,13 @@ function getPointCity(point) {
 const sourceTypeLabels = {
   agenda: 'Evento',
   roteiro: 'Roteiro',
+  ponto_turistico: 'Ponto turistico',
   hotel: 'Hotel',
   veiculo: 'Veiculo',
   dica: 'Dica',
   emergencia: 'Emergencia',
   ponto: 'Ponto',
+  cidade_visitada: 'Cidade visitada',
 }
 
 function normalizeDateValue(value) {
@@ -135,6 +138,7 @@ function isLocationActiveNow(location, activeLocations) {
 }
 
 function MapPage() {
+  const navigate = useNavigate()
   const { userProfile, trip } = useAuth()
   const { update: updateAgenda, refresh: refreshAgenda } = useAgenda()
   const { update: updateHotel, refresh: refreshHotels } = useHotels()
@@ -434,6 +438,9 @@ function MapPage() {
 
   return (
     <div className="space-y-4">
+      <Button variant="secondary" icon={<FiArrowLeft />} onClick={() => navigate(-1)}>
+        Voltar
+      </Button>
       <Card className="overflow-hidden p-0">
         <div className="space-y-4 bg-[linear-gradient(180deg,#d8f3dc_0%,#effbf6_100%)] p-4">
           <Card className="space-y-3 bg-white/90">

@@ -12,6 +12,8 @@ import useAuth from '../../hooks/useAuth'
 import useDiary from '../../hooks/useDiary'
 import {
   canCreateContent,
+  canDeleteAnyContent,
+  canDeleteOwnContent,
   canEditAnyContent,
   canEditOwnContent,
 } from '../../utils/permissions'
@@ -63,6 +65,12 @@ function DiaryPage() {
   }, [agenda, entries])
 
   async function handleDelete(entryId) {
+    const confirmed = window.confirm(
+      'Tem certeza que deseja excluir esta postagem? Essa acao nao pode ser desfeita.',
+    )
+
+    if (!confirmed) return
+
     try {
       await deleteEntry(entryId)
       setFeedback('Registro removido com sucesso.')
@@ -93,10 +101,49 @@ function DiaryPage() {
         tone={feedback.includes('sucesso') ? 'success' : 'error'}
       />
 
-      {travelGallery.length > 0 ? (
-        <div className="space-y-4">
+      {loading ? <Loading /> : null}
+
+      {!loading && error ? (
+        <ErrorState title="Falha ao carregar diario" description={error} />
+      ) : null}
+
+      {!loading && !error && entries.length === 0 ? (
+        <EmptyState
+          title="Nenhum registro ainda"
+          description="Comece registrando fotos, textos e momentos especiais da viagem."
+        />
+      ) : null}
+
+      {!loading && !error && entries.length > 0 ? (
+        <section className="space-y-4">
           <div>
-            <h3 className="text-lg font-semibold text-slate-950">Fotos da viagem</h3>
+            <h2 className="text-xl font-bold text-slate-950">Postagens do diario</h2>
+            <p className="mt-1 text-sm text-slate-500">Abra uma postagem para ver as fotos ampliadas e ler o registro completo.</p>
+          </div>
+          {entries.map((entry) => {
+            const canManageEntry =
+              canEditAnyContent(userProfile) || canEditOwnContent(userProfile, entry)
+            const canDeleteEntry =
+              canDeleteAnyContent(userProfile) || canDeleteOwnContent(userProfile, entry)
+
+            return (
+              <DiaryCard
+                key={entry.id}
+                entry={entry}
+                canEdit={canManageEntry}
+                canDelete={canDeleteEntry}
+                onEdit={() => navigate(`/diary/${entry.id}/edit`)}
+                onDelete={() => handleDelete(entry.id)}
+              />
+            )
+          })}
+        </section>
+      ) : null}
+
+      {travelGallery.length > 0 ? (
+        <section className="space-y-4 border-t border-slate-200 pt-6">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">Fotos da viagem</h2>
             <p className="mt-1 text-sm text-slate-500">Agrupadas por dia e por destino para ficar facil revisitar cada parada.</p>
           </div>
           {travelGallery.map((group) => (
@@ -125,38 +172,8 @@ function DiaryPage() {
               </div>
             </div>
           ))}
-        </div>
+        </section>
       ) : null}
-
-      {loading ? <Loading /> : null}
-
-      {!loading && error ? (
-        <ErrorState title="Falha ao carregar diario" description={error} />
-      ) : null}
-
-      {!loading && !error && entries.length === 0 ? (
-        <EmptyState
-          title="Nenhum registro ainda"
-          description="Comece registrando fotos, textos e momentos especiais da viagem."
-        />
-      ) : null}
-
-      {!loading && !error
-        ? entries.map((entry) => {
-            const canManageEntry =
-              canEditAnyContent(userProfile) || canEditOwnContent(userProfile, entry)
-
-            return (
-              <DiaryCard
-                key={entry.id}
-                entry={entry}
-                canManage={canManageEntry}
-                onEdit={() => navigate(`/diary/${entry.id}/edit`)}
-                onDelete={() => handleDelete(entry.id)}
-              />
-            )
-          })
-        : null}
     </div>
   )
 }

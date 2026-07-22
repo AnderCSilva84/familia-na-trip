@@ -1,4 +1,4 @@
-import { FiCalendar, FiHome, FiMap, FiMenu } from 'react-icons/fi'
+import { FiCalendar, FiCamera, FiHome, FiMap, FiMenu } from 'react-icons/fi'
 import { NavLink } from 'react-router-dom'
 import useAlarms from '../../hooks/useAlarms'
 import useNotifications from '../../hooks/useNotifications'
@@ -7,6 +7,8 @@ const items = [
   { to: '/dashboard', label: 'Inicio', icon: FiHome },
   { to: '/map', label: 'Mapa', icon: FiMap },
   { to: '/agenda', label: 'Agenda', icon: FiCalendar },
+  { to: '/gallery', label: 'Galeria', icon: FiCamera, desktopOnly: true },
+  { to: '/travel-history', label: 'Mapa da família', icon: FiMap, desktopOnly: true },
   { to: '/settings', label: 'Menu', icon: FiMenu },
 ]
 
@@ -34,7 +36,7 @@ function BottomNavigation({ variant = 'mobile' }) {
       }
     >
       <ul className={isDesktop ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-4 gap-2'}>
-        {items.map(({ to, label, icon: Icon }) => (
+        {items.filter((item) => isDesktop || !item.desktopOnly).map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <NavLink
               to={to}

@@ -269,6 +269,18 @@ function SettingsPage() {
       <Card className="space-y-3">
         <h3 className="text-base font-semibold text-slate-950">Atalhos da viagem</h3>
         <div className="grid gap-3 sm:grid-cols-2">
+          <Link to="/trips" className="rounded-3xl bg-teal-50 p-4 text-sm text-teal-800 shadow-sm transition hover:bg-teal-100">
+            <p className="font-semibold">Nossas viagens</p>
+            <p className="mt-1 text-teal-700">Escolha outra trip ou consulte o histórico da família.</p>
+          </Link>
+          <Link to="/gallery" className="rounded-3xl bg-teal-50 p-4 text-sm text-teal-800 shadow-sm transition hover:bg-teal-100">
+            <p className="font-semibold">Galeria da família</p>
+            <p className="mt-1 text-teal-700">Veja as fotos reunidas de todas as viagens.</p>
+          </Link>
+          <Link to="/travel-history" className="rounded-3xl bg-teal-50 p-4 text-sm text-teal-800 shadow-sm transition hover:bg-teal-100">
+            <p className="font-semibold">Mapa da família</p>
+            <p className="mt-1 text-teal-700">Cidades e estados que a família já visitou.</p>
+          </Link>
           <Link
             to="/today"
             className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
@@ -324,6 +336,13 @@ function SettingsPage() {
           >
             <p className="font-semibold text-slate-900">Checklist e malas</p>
             <p className="mt-1 text-slate-500">Divida preparativos e confira as malas de toda a familia.</p>
+          </Link>
+          <Link
+            to="/attractions"
+            className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <p className="font-semibold text-slate-900">Pontos turisticos</p>
+            <p className="mt-1 text-slate-500">Organize os lugares que a familia quer conhecer e marque os visitados.</p>
           </Link>
           <Link
             to="/souvenirs"

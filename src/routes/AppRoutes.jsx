@@ -13,6 +13,7 @@ const MemberFormPage = lazy(() => import('../pages/Members/MemberFormPage'))
 const PollsPage = lazy(() => import('../pages/Polls/PollsPage'))
 const PollFormPage = lazy(() => import('../pages/Polls/PollFormPage'))
 const DiaryPage = lazy(() => import('../pages/Diary/DiaryPage'))
+const DiaryEntryPage = lazy(() => import('../pages/Diary/DiaryEntryPage'))
 const NewDiaryEntryPage = lazy(() => import('../pages/Diary/NewDiaryEntryPage'))
 const ItineraryPage = lazy(() => import('../pages/Itinerary/ItineraryPage'))
 const ItineraryFormPage = lazy(() => import('../pages/Itinerary/ItineraryFormPage'))
@@ -40,6 +41,12 @@ const ChecklistPage = lazy(() => import('../pages/Checklist/ChecklistPage'))
 const SouvenirsPage = lazy(() => import('../pages/Souvenirs/SouvenirsPage'))
 const TodayPage = lazy(() => import('../pages/Today/TodayPage'))
 const MedicalPage = lazy(() => import('../pages/Medical/MedicalPage'))
+const AttractionsPage = lazy(() => import('../pages/Attractions/AttractionsPage'))
+const AttractionFormPage = lazy(() => import('../pages/Attractions/AttractionFormPage'))
+const TripsPage = lazy(() => import('../pages/Trips/TripsPage'))
+const TripFormPage = lazy(() => import('../pages/Trips/TripFormPage'))
+const GalleryPage = lazy(() => import('../pages/Gallery/GalleryPage'))
+const TravelHistoryMapPage = lazy(() => import('../pages/Map/TravelHistoryMapPage'))
 
 function renderPage(Component) {
   return (
@@ -59,13 +66,17 @@ function AppRoutes() {
         <Route element={<PrivateRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={renderPage(DashboardPage)} />
+            <Route path="/trips" element={renderPage(TripsPage)} />
+            <Route path="/gallery" element={renderPage(GalleryPage)} />
             <Route path="/map" element={renderPage(MapPage)} />
+            <Route path="/travel-history" element={renderPage(TravelHistoryMapPage)} />
             <Route path="/members" element={renderPage(MembersPage)} />
             <Route path="/polls" element={renderPage(PollsPage)} />
             <Route path="/polls/new" element={renderPage(PollFormPage)} />
             <Route path="/diary" element={renderPage(DiaryPage)} />
             <Route path="/diary/new" element={renderPage(NewDiaryEntryPage)} />
             <Route path="/diary/:entryId/edit" element={renderPage(NewDiaryEntryPage)} />
+            <Route path="/diary/:entryId" element={renderPage(DiaryEntryPage)} />
             <Route path="/itinerary" element={renderPage(ItineraryPage)} />
             <Route path="/itinerary/new" element={renderPage(ItineraryFormPage)} />
             <Route path="/itinerary/:itemId/edit" element={renderPage(ItineraryFormPage)} />
@@ -97,9 +108,14 @@ function AppRoutes() {
             <Route path="/souvenirs" element={renderPage(SouvenirsPage)} />
             <Route path="/today" element={renderPage(TodayPage)} />
             <Route path="/medical" element={renderPage(MedicalPage)} />
+            <Route path="/attractions" element={renderPage(AttractionsPage)} />
+            <Route path="/attractions/new" element={renderPage(AttractionFormPage)} />
+            <Route path="/attractions/:attractionId/edit" element={renderPage(AttractionFormPage)} />
             <Route path="/settings" element={renderPage(SettingsPage)} />
             <Route element={<AdminRoute />}>
               <Route path="/admin" element={renderPage(AdminPanelPage)} />
+              <Route path="/trips/new" element={renderPage(TripFormPage)} />
+              <Route path="/trips/:tripId/edit" element={renderPage(TripFormPage)} />
               <Route path="/expenses/import" element={renderPage(ExpenseImportPage)} />
               <Route path="/members/manage" element={renderPage(MemberFormPage)} />
               <Route path="/members/manage/:memberId" element={renderPage(MemberFormPage)} />

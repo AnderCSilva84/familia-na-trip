@@ -21,6 +21,7 @@ import { createNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 import { deleteAgendaActualExpense, syncAgendaActualExpense } from './expenseService'
 import { geocodeLocation } from './geocodeService'
+import { deleteAttractionByAgendaId, syncAttractionFromAgenda } from './attractionService'
 
 function agendaCollection() {
   ensureFirebaseConfigured()
@@ -133,6 +134,17 @@ function mapAgendaItem(id, data) {
   }
 }
 
+export async function getAgendaByTrips(tripIds = []) {
+  const uniqueIds = [...new Set(tripIds.filter(Boolean))]
+  if (uniqueIds.length === 0) return []
+  const snapshots = await Promise.all(
+    uniqueIds.map((tripId) => getDocs(query(agendaCollection(), where('tripId', '==', tripId)))),
+  )
+  return snapshots.flatMap((snapshot) =>
+    snapshot.docs.map((agendaDoc) => mapAgendaItem(agendaDoc.id, agendaDoc.data())),
+  )
+}
+
 async function uploadAgendaEventImage(tripId, eventId, file) {
   ensureFirebaseConfigured()
 
@@ -226,6 +238,10 @@ export async function createAgendaEvent(data, imageFile = null) {
     })
 
     payload.alarmId = alarmId
+  }
+
+  if (payload.type === 'ponto_turistico') {
+    await syncAttractionFromAgenda({ ...payload, id: eventRef.id })
   }
 
   if (shouldNotify) {
@@ -342,6 +358,12 @@ export async function updateAgendaEvent(id, data) {
     actualExpenseId,
     updatedAt: serverTimestamp(),
   })
+
+  if (payload.type === 'ponto_turistico') {
+    await syncAttractionFromAgenda({ ...currentData, ...payload, id })
+  } else if (currentData.type === 'ponto_turistico') {
+    await deleteAttractionByAgendaId(id)
+  }
 }
 
 export async function deleteAgendaEvent(id) {
@@ -358,6 +380,7 @@ export async function deleteAgendaEvent(id) {
 
   await deleteAlarmByAgendaEventId(id)
   await deleteAgendaActualExpense(id)
+  await deleteAttractionByAgendaId(id)
   await deleteDoc(eventRef)
 }
 

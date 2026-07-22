@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FiBell, FiCalendar, FiExternalLink, FiMap, FiNavigation, FiPlus } from 'react-icons/fi'
+import { FiBell, FiCalendar, FiExternalLink, FiMap, FiNavigation, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -9,6 +9,8 @@ import Loading from '../../components/common/Loading'
 import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useAgenda from '../../hooks/useAgenda'
+import useAgendaReviews from '../../hooks/useAgendaReviews'
+import { getCatRatingMeta } from '../../utils/catRating'
 import { buildMonthGrid, formatCurrency, formatDateInput, formatDisplayDate, normalizeDisplayTime } from '../../utils/formatters'
 import { buildGoogleMapsUrl, buildWazeUrl } from '../../utils/navigationLinks'
 
@@ -16,6 +18,7 @@ const days = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 const typeLabels = {
   evento: 'Evento',
   roteiro: 'Roteiro',
+  ponto_turistico: 'Ponto turistico',
   hotel: 'Hotel',
   veiculo: 'Veiculo',
   alarme: 'Alarme',
@@ -47,9 +50,15 @@ function formatMonthTitle(selectedDate) {
 function AgendaPage() {
   const navigate = useNavigate()
   const { agenda, loading, error, usingMockData, delete: remove } = useAgenda()
+  const { saveReview } = useAgendaReviews()
   const [selectedDate, setSelectedDate] = useState(getTodayString)
   const [typeFilter, setTypeFilter] = useState('todos')
   const [feedback, setFeedback] = useState('')
+  const [search, setSearch] = useState('')
+  const [reviewEvent, setReviewEvent] = useState(null)
+  const [rating, setRating] = useState(0)
+  const [reviewNote, setReviewNote] = useState('')
+  const [reviewSaving, setReviewSaving] = useState(false)
   const monthDays = useMemo(() => buildMonthGrid(selectedDate), [selectedDate])
   const selectedDateLabel = useMemo(() => formatDisplayDate(selectedDate), [selectedDate])
   const selectedItems = useMemo(
@@ -57,10 +66,26 @@ function AgendaPage() {
       agenda.filter((item) => {
         const sameDate = formatDateInput(item.date) === selectedDate
         const sameType = typeFilter === 'todos' || item.type === typeFilter
-        return sameDate && sameType
+        const haystack = `${item.title} ${item.description} ${item.city} ${item.local}`.toLowerCase()
+        const matchesSearch = !search.trim() || haystack.includes(search.trim().toLowerCase())
+        return (search.trim() ? matchesSearch : sameDate) && sameType
       }),
-    [agenda, selectedDate, typeFilter],
+    [agenda, search, selectedDate, typeFilter],
   )
+
+  async function handleSaveReview() {
+    if (!reviewEvent || rating < 1) return
+    setReviewSaving(true)
+    try {
+      await saveReview(reviewEvent, { actualCost: 0, rating, note: reviewNote.trim() })
+      setFeedback('Avaliacao salva com sucesso.')
+      setReviewEvent(null)
+    } catch (saveError) {
+      setFeedback(saveError.message ?? 'Nao foi possivel salvar a avaliacao.')
+    } finally {
+      setReviewSaving(false)
+    }
+  }
 
   async function handleDelete(id) {
     try {
@@ -159,6 +184,9 @@ function AgendaPage() {
           ) : null}
         </div>
         <div className="flex gap-3">
+          <Button className="flex-1" onClick={() => { setReviewEvent(item); setRating(0); setReviewNote('') }}>
+            Avaliar
+          </Button>
           <Button variant="secondary" className="flex-1" onClick={() => navigate(`/agenda/${item.id}/edit`)}>
             Editar
           </Button>
@@ -249,6 +277,16 @@ function AgendaPage() {
         ))}
       </div>
 
+      <label className="relative block">
+        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar experiencia passada por nome, local ou cidade"
+          className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4 outline-none focus:border-teal-500"
+        />
+      </label>
+
       {loading ? <Loading /> : null}
       {!loading && error ? <ErrorState title="Falha ao carregar agenda" description={error} /> : null}
       {!loading && !error && selectedItems.length === 0 ? (
@@ -271,6 +309,23 @@ function AgendaPage() {
         </Card>
       ) : null}
       {!loading && !error ? selectedItems.map(renderAgendaItem) : null}
+
+      {reviewEvent ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/35 p-4 backdrop-blur-sm lg:items-center">
+          <button className="absolute inset-0" onClick={() => setReviewEvent(null)} aria-label="Fechar avaliacao" />
+          <Card className="relative z-10 w-full max-w-xl space-y-5 rounded-[32px]">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Avaliar experiencia</p><h3 className="mt-2 text-xl font-semibold">{reviewEvent.title}</h3><p className="text-sm text-slate-500">{formatDisplayDate(reviewEvent.date)}</p></div>
+              <button onClick={() => setReviewEvent(null)} className="rounded-full bg-slate-100 p-3"><FiX /></button>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" onClick={() => setRating(value)} className={`rounded-2xl border px-2 py-3 ${rating === value ? 'border-teal-500 ring-4 ring-teal-100' : 'border-slate-200'} ${getCatRatingMeta(value)?.className ?? ''}`}><span className="block text-2xl">{getCatRatingMeta(value)?.emoji ?? '🐱'}</span><span className="text-xs font-semibold">{value}</span></button>)}
+            </div>
+            <textarea value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Como foi essa experiencia?" className="min-h-28 w-full rounded-2xl border border-slate-200 p-4 outline-none focus:border-teal-500" />
+            <Button className="w-full" onClick={handleSaveReview} disabled={rating < 1 || reviewSaving}>{reviewSaving ? 'Salvando...' : 'Salvar avaliacao'}</Button>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 }

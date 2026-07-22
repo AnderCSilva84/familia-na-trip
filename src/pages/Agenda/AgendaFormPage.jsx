@@ -9,11 +9,21 @@ import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useAgenda from '../../hooks/useAgenda'
 import useMembers from '../../hooks/useMembers'
+import useAppStore from '../../store/useAppStore'
+import { canEditAnyContent } from '../../utils/permissions'
 import { formatDateInput } from '../../utils/formatters'
 import { getLinkPreviewData } from '../../utils/linkPreview'
 import { resolveMapMetadata } from '../../utils/locationPresets'
 
-const types = ['evento', 'roteiro', 'alarme', 'hotel', 'veiculo', 'outro']
+const types = [
+  { value: 'evento', label: 'Evento' },
+  { value: 'roteiro', label: 'Roteiro' },
+  { value: 'ponto_turistico', label: 'Ponto turistico' },
+  { value: 'alarme', label: 'Alarme' },
+  { value: 'hotel', label: 'Hospedagem' },
+  { value: 'veiculo', label: 'Veiculo' },
+  { value: 'outro', label: 'Outro' },
+]
 
 function clampPercentage(value) {
   return Math.min(95, Math.max(5, value))
@@ -32,7 +42,7 @@ function memberMatchesTarget(member, target) {
     .includes(normalizedTarget)
 }
 
-function AgendaFormContent({ editingEvent, eventId, usingMockData, create, update, members, navigate }) {
+function AgendaFormContent({ editingEvent, eventId, usingMockData, create, update, members, navigate, canManageValues }) {
   const initialEvent = editingEvent ?? null
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState('')
@@ -103,8 +113,8 @@ function AgendaFormContent({ editingEvent, eventId, usingMockData, create, updat
         startTime: String(formData.get('startTime') ?? ''),
         endTime: '',
         location: String(formData.get('location') ?? ''),
-        estimatedCost: Number(formData.get('estimatedCost') ?? 0) || 0,
-        actualCost: Number(formData.get('actualCost') ?? 0) || 0,
+        estimatedCost: canManageValues ? Number(formData.get('estimatedCost') ?? 0) || 0 : Number(initialEvent?.estimatedCost ?? 0),
+        actualCost: canManageValues ? Number(formData.get('actualCost') ?? 0) || 0 : Number(initialEvent?.actualCost ?? 0),
         expenseCategory: initialEvent?.expenseCategory ?? 'Outros',
         createdBy: initialEvent?.createdBy ?? '',
         link: reservationLink,
@@ -171,10 +181,10 @@ function AgendaFormContent({ editingEvent, eventId, usingMockData, create, updat
       <Card>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <Input name="title" label="Titulo" defaultValue={initialEvent?.title ?? ''} required />
-          <div className="grid gap-3 sm:grid-cols-2">
+          {canManageValues ? <div className="grid gap-3 sm:grid-cols-2">
             <Input name="weekday" label="Dia da semana" defaultValue={initialEvent?.weekday ?? ''} />
             <Input name="city" label="Cidade" defaultValue={initialEvent?.city ?? ''} />
-          </div>
+          </div> : null}
           <Input name="local" label="Local / parada" defaultValue={initialEvent?.local ?? initialEvent?.title ?? ''} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input name="address" label="Endereco" defaultValue={initialEvent?.address ?? ''} placeholder="Rua, avenida, numero..." />
@@ -323,8 +333,8 @@ function AgendaFormContent({ editingEvent, eventId, usingMockData, create, updat
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             >
               {types.map((type) => (
-                <option key={type} value={type}>
-                  {type}
+                <option key={type.value} value={type.value}>
+                  {type.label}
                 </option>
               ))}
             </select>
@@ -405,6 +415,7 @@ function AgendaFormPage() {
   const { eventId } = useParams()
   const { agenda, loading, error, usingMockData, create, update } = useAgenda()
   const { members } = useMembers()
+  const userProfile = useAppStore((state) => state.userProfile)
   const editingEvent = agenda.find((item) => item.id === eventId)
 
   if (loading) return <Loading />
@@ -423,6 +434,7 @@ function AgendaFormPage() {
       update={update}
       members={members}
       navigate={navigate}
+      canManageValues={canEditAnyContent(userProfile)}
     />
   )
 }

@@ -1,19 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  FiBell,
+  FiBookOpen,
   FiFileText,
   FiCheckCircle,
-  FiCheckSquare,
-  FiCalendar,
   FiCreditCard,
   FiCloud,
   FiCloudRain,
+  FiCamera,
   FiHeart,
   FiHome,
   FiGift,
   FiPlus,
+  FiMapPin,
+  FiMap,
   FiSun,
   FiX,
+  FiUsers,
 } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import Avatar from '../../components/common/Avatar'
@@ -24,13 +26,13 @@ import CatRatingBadge from '../../components/common/CatRatingBadge'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
 import Input from '../../components/common/Input'
+import VisitedPlacesMap from '../../components/maps/VisitedPlacesMap'
 import useAgenda from '../../hooks/useAgenda'
 import useAgendaReviews from '../../hooks/useAgendaReviews'
 import useAuth from '../../hooks/useAuth'
 import useDiary from '../../hooks/useDiary'
 import useExpenses from '../../hooks/useExpenses'
 import useMembers from '../../hooks/useMembers'
-import useNotifications from '../../hooks/useNotifications'
 import { getDestinationWeather } from '../../services/weatherService'
 import { getCatRatingMeta } from '../../utils/catRating'
 import { compareEventChronology } from '../../utils/eventDefaults'
@@ -43,25 +45,25 @@ import {
 } from '../../utils/formatters'
 
 const shortcuts = [
+  { to: '/trips', label: 'Nossas viagens', icon: FiMap },
+  { to: '/gallery', label: 'Galeria', icon: FiCamera },
+  { to: '/members', label: 'Membros', icon: FiUsers },
   { to: '/today', label: 'Hoje', icon: FiSun },
-  { to: '/itinerary', label: 'Roteiro', icon: FiCalendar },
+  { to: '/attractions', label: 'Pontos turisticos', icon: FiMapPin },
+  { to: '/diary', label: 'Diario', icon: FiBookOpen },
   { to: '/wallet', label: 'Carteira', icon: FiFileText },
   { to: '/hotels', label: 'Hospedagens', icon: FiHome },
-  { to: '/checklist', label: 'Checklist e malas', icon: FiCheckSquare },
   { to: '/souvenirs', label: 'Lembrancas', icon: FiGift },
   { to: '/expenses', label: 'Gastos', icon: FiCreditCard },
   { to: '/emergency', label: 'Emergencia', icon: FiPlus, iconClassName: 'text-rose-600' },
   { to: '/medical', label: 'Cartao medico', icon: FiHeart, iconClassName: 'text-rose-600' },
 ]
 
-const TRIP_COUNTDOWN_TARGET = '2026-07-18T00:00:00-03:00'
-const TRIP_START_DATE = '2026-07-18'
-const TRIP_END_DATE = '2026-07-29'
-const TRIP_TOTAL_DAYS = 12
 const FAMILY_SPLIT_COUNT = 5
 const dashboardTypeLabels = {
   evento: 'Evento',
   roteiro: 'Roteiro',
+  ponto_turistico: 'Ponto turistico',
   hotel: 'Hotel',
   veiculo: 'Veiculo',
   alarme: 'Alarme',
@@ -113,7 +115,6 @@ function DashboardPage() {
   const { summary } = useExpenses()
   const { agenda, update: updateAgenda } = useAgenda()
   const { reviews, saveReview, toggleLike, addComment, deleteReview } = useAgendaReviews()
-  const { notifications, unreadCount } = useNotifications()
   const displayName = userProfile?.name ?? currentUser?.displayName ?? currentUser?.email ?? 'viajante'
   const recentEntries = entries.slice(0, 2)
   const totalBudget = Number(trip?.totalBudget ?? 0)
@@ -161,10 +162,23 @@ function DashboardPage() {
         .filter(Boolean),
     )
 
+    for (const place of trip.cities ?? []) {
+      const city = normalizeCityName(place.city)
+      if (city) citySet.add(city)
+    }
+
     return citySet.size
-  }, [agenda, todayString])
+  }, [agenda, todayString, trip.cities])
+  const eventDates = useMemo(
+    () => agenda.map((item) => formatDateInput(item.date)).filter(Boolean).sort(),
+    [agenda],
+  )
+  const firstEventDate = eventDates[0] ?? ''
+  const lastEventDate = eventDates.at(-1) ?? ''
+  const effectiveTripStartDate = firstEventDate || trip.startDate
+  const effectiveTripEndDate = lastEventDate || trip.endDate
   const daysTogether = useMemo(() => {
-    const startDate = new Date(`${TRIP_START_DATE}T00:00:00-03:00`)
+    const startDate = new Date(`${effectiveTripStartDate}T00:00:00`)
     const currentDate = new Date(`${todayString}T00:00:00-03:00`)
 
     if (currentDate.getTime() < startDate.getTime()) {
@@ -173,7 +187,7 @@ function DashboardPage() {
 
     const diffInDays = Math.floor((currentDate.getTime() - startDate.getTime()) / 86_400_000)
     return diffInDays + 1
-  }, [todayString])
+  }, [todayString, effectiveTripStartDate])
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -250,7 +264,7 @@ function DashboardPage() {
     [agenda, nowDate],
   )
   const weatherDestination = useMemo(() => {
-    if (!nextWeatherEvent) return trip?.destination || ''
+    if (!nextWeatherEvent) return trip.destination || ''
 
     return (
       nextWeatherEvent.city ||
@@ -261,7 +275,7 @@ function DashboardPage() {
       trip?.destination ||
       ''
     )
-  }, [nextWeatherEvent, trip?.destination])
+  }, [nextWeatherEvent, trip.destination])
   const weatherTargetDate = formatDateInput(nextWeatherEvent?.date)
 
   useEffect(() => {
@@ -329,7 +343,7 @@ function DashboardPage() {
       : 'Sem avaliacao ainda'
 
   const tripCountdown = useMemo(() => {
-    const targetTime = new Date(TRIP_COUNTDOWN_TARGET).getTime()
+    const targetTime = new Date(`${effectiveTripStartDate}T00:00:00`).getTime()
     const diff = Math.max(0, targetTime - countdownNow)
     const totalMinutes = Math.floor(diff / 60_000)
     const days = Math.floor(totalMinutes / (60 * 24))
@@ -342,15 +356,24 @@ function DashboardPage() {
       hours,
       minutes,
     }
-  }, [countdownNow])
-  const tripPhase = todayString < TRIP_START_DATE
-    ? 'before'
-    : todayString <= TRIP_END_DATE
-      ? 'during'
-      : 'after'
+  }, [countdownNow, effectiveTripStartDate])
+  const tripIsClosed = trip.status === 'completed' || trip.status === 'archived'
+  const tripPhase = tripIsClosed
+    ? 'after'
+    : todayString < effectiveTripStartDate
+      ? 'before'
+      : todayString <= effectiveTripEndDate
+        ? 'during'
+        : 'after'
+  const totalPeriodStartDate = tripIsClosed ? trip.startDate : effectiveTripStartDate
+  const totalPeriodEndDate = tripIsClosed ? trip.endDate : effectiveTripEndDate
+  const tripTotalDays = Math.max(
+    1,
+    Math.round((new Date(`${totalPeriodEndDate}T00:00:00`) - new Date(`${totalPeriodStartDate}T00:00:00`)) / 86_400_000) + 1,
+  )
 
   async function handlePlanningSave() {
-    if (!planningEvent || !canManageEventCosts) {
+    if (!planningEvent) {
       return
     }
 
@@ -358,19 +381,26 @@ function DashboardPage() {
     setPlanningFeedback('')
 
     try {
+      if (canManageEventCosts && !String(planningActualCost ?? '').trim()) {
+        setPlanningFeedback('Informe o valor gasto no passeio antes de salvar a avaliacao.')
+        return
+      }
+
       const normalizedActualCost = Number(
         String(planningActualCost ?? '')
           .replace(/\./g, '')
           .replace(',', '.'),
       ) || 0
 
-      await updateAgenda(planningEvent.id, {
-        ...planningEvent,
-        actualCost: normalizedActualCost,
-        catRating: planningCatRating,
-      })
+      if (canManageEventCosts) {
+        await updateAgenda(planningEvent.id, {
+          ...planningEvent,
+          actualCost: normalizedActualCost,
+          catRating: planningCatRating,
+        })
+      }
       await saveReview(planningEvent, {
-        actualCost: normalizedActualCost,
+        actualCost: canManageEventCosts ? normalizedActualCost : 0,
         rating: planningCatRating,
         note: planningNote.trim(),
       })
@@ -446,7 +476,7 @@ function DashboardPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-700">
-                    Contagem para 18/07/2026
+                    Contagem para {formatDisplayDate(effectiveTripStartDate)}
                   </p>
                 </div>
                 <Badge tone="accent" className="mx-auto w-fit sm:mx-0">
@@ -482,12 +512,14 @@ function DashboardPage() {
             {tripPhase === 'after' ? <div className="mx-auto mt-4 w-full rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,247,237,0.95),rgba(254,240,138,0.74))] p-5 text-center shadow-[0_18px_34px_rgba(245,158,11,0.14)]">
               <p className="text-xs font-bold uppercase tracking-[0.24em] text-amber-700">Ferias inesqueciveis</p>
               <p className="mt-2 text-3xl font-semibold tracking-tight text-amber-950">Que viagem incrivel!</p>
-              <p className="mt-2 text-sm text-amber-800">Foram {TRIP_TOTAL_DAYS} dias juntos. Agora as melhores lembrancas continuam por aqui.</p>
+              <p className="mt-2 text-sm text-amber-800">Foram {tripTotalDays} dias juntos. Agora as melhores lembrancas continuam por aqui.</p>
               <div className="mt-4 flex flex-wrap justify-center gap-2"><Link to="/diary" className="rounded-2xl bg-amber-700 px-5 py-3 text-sm font-semibold text-white shadow-lg">Rever memorias</Link><Link to="/expenses" className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-amber-800 shadow-sm">Resumo da viagem</Link></div>
             </div> : null}
           </div>
         </div>
       </Card>
+
+      {tripIsClosed ? <VisitedPlacesMap today={effectiveTripEndDate} /> : null}
 
       <Card className="overflow-hidden border-0 bg-[linear-gradient(135deg,#0f766e_0%,#0891b2_100%)] text-white shadow-lg">
         <div className="flex items-center justify-between gap-4">
@@ -727,6 +759,8 @@ function DashboardPage() {
         </Card>
       </div>
 
+      {!tripIsClosed ? <VisitedPlacesMap today={todayString} /> : null}
+
       <Card>
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-950">Membros conectados</h3>
@@ -766,15 +800,14 @@ function DashboardPage() {
 
       <Card>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-950">Atividades recentes</h3>
-          <Link to="/notifications" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
-            <FiBell size={14} />
-            {unreadCount} nao lida(s)
+          <h3 className="text-lg font-semibold text-slate-950">Posts do Diario</h3>
+          <Link to="/diary" className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700">
+            Ver todos
           </Link>
         </div>
         <div className="mt-4 space-y-4">
           {recentEntries.map((entry) => (
-            <div key={entry.id} className="flex gap-3 rounded-3xl bg-slate-50 p-3">
+            <Link key={entry.id} to="/diary" className="flex gap-3 rounded-3xl bg-slate-50 p-3 transition hover:bg-teal-50">
               <AppImage
                 src={entry.photos?.[0]?.url ?? entry.image}
                 alt={entry.title}
@@ -787,12 +820,12 @@ function DashboardPage() {
                 <h4 className="mt-1 text-sm font-semibold text-slate-900">{entry.title}</h4>
                 <p className="mt-1 text-sm text-slate-500">{entry.content ?? entry.excerpt}</p>
               </div>
-            </div>
+            </Link>
           ))}
-          {recentEntries.length === 0 && notifications[0] ? (
+          {recentEntries.length === 0 ? (
             <div className="rounded-3xl bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">{notifications[0].title}</p>
-              <p className="mt-1 text-sm text-slate-500">{notifications[0].message}</p>
+              <p className="text-sm font-semibold text-slate-900">Nenhum post publicado ainda</p>
+              <p className="mt-1 text-sm text-slate-500">Os momentos registrados no Diario vao aparecer aqui.</p>
             </div>
           ) : null}
         </div>
@@ -927,15 +960,20 @@ function DashboardPage() {
                 </div>
               </div>
 
-              {canManageEventCosts ? (
-                <>
+              <>
+                {canManageEventCosts ? (
                   <Input
-                    label="Quanto voce gastou"
+                    label="Valor gasto no passeio"
                     type="text"
                     value={planningActualCost}
                     onChange={(event) => setPlanningActualCost(event.target.value)}
                     placeholder="Ex: 120,50"
                   />
+                ) : (
+                  <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
+                    Somente admin e superadmin podem registrar valores. Sua avaliacao continua liberada.
+                  </div>
+                )}
 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
@@ -972,12 +1010,7 @@ function DashboardPage() {
                       className="min-h-24 rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
                     />
                   </label>
-                </>
-              ) : (
-                <div className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-600">
-                  Somente admin e superadmin podem registrar o gasto real e concluir este evento.
-                </div>
-              )}
+              </>
 
               {planningFeedback ? (
                 <div className="rounded-2xl bg-teal-50 px-4 py-3 text-sm text-teal-700">
@@ -989,11 +1022,9 @@ function DashboardPage() {
                 <Button variant="secondary" className="flex-1" onClick={closePlanningCard}>
                   Fechar
                 </Button>
-                {canManageEventCosts ? (
-                  <Button className="flex-1" onClick={handlePlanningSave} disabled={planningSubmitting}>
-                    {planningSubmitting ? 'Salvando...' : 'Concluir com gasto'}
-                  </Button>
-                ) : null}
+                <Button className="flex-1" onClick={handlePlanningSave} disabled={planningSubmitting || planningCatRating < 1}>
+                  {planningSubmitting ? 'Salvando...' : canManageEventCosts ? 'Concluir com gasto' : 'Salvar avaliacao'}
+                </Button>
               </div>
 
               {planningEvent.estimatedCost > 0 || planningEvent.actualCost > 0 || planningEvent.catRating > 0 ? (

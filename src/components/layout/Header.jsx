@@ -4,7 +4,7 @@ import useAuth from '../../hooks/useAuth'
 import Avatar from '../common/Avatar'
 
 function Header({ title, subtitle }) {
-  const { userProfile, currentUser } = useAuth()
+  const { userProfile, currentUser, trip, trips, setTrip } = useAuth()
   const avatarSource = userProfile?.photoURL ?? currentUser?.photoURL ?? ''
   const avatarLabel = userProfile?.name ?? currentUser?.displayName ?? 'FT'
 
@@ -21,6 +21,16 @@ function Header({ title, subtitle }) {
           />
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 lg:text-3xl">{title}</h1>
           <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+          {trips.length > 0 ? (
+            <select
+              value={trip?.id ?? ''}
+              onChange={(event) => setTrip(trips.find((item) => item.id === event.target.value))}
+              className="mt-3 max-w-[260px] rounded-xl border border-teal-100 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-800 outline-none focus:ring-4 focus:ring-teal-100"
+              aria-label="Selecionar viagem"
+            >
+              {trips.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <button

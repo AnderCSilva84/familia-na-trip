@@ -4,6 +4,11 @@ import Header from '../components/layout/Header'
 import PageContainer from '../components/layout/PageContainer'
 
 const pageMeta = [
+  { match: '/trips/new', title: 'Cadastrar trip', subtitle: 'Planeje uma nova viagem ou registre uma aventura passada' },
+  { match: '/trips/', title: 'Editar trip', subtitle: 'Atualize nome, período e informações da viagem' },
+  { match: '/trips', title: 'Viagens', subtitle: 'Todas as trips da família' },
+  { match: '/gallery', title: 'Galeria', subtitle: 'Fotos e memórias de todas as viagens' },
+  { match: '/travel-history', title: 'Mapa da família', subtitle: 'Todas as cidades e estados já visitados' },
   { match: '/dashboard', title: 'Inicio', subtitle: 'Sua viagem em um so lugar' },
   { match: '/map', title: 'Mapa', subtitle: 'Paradas, rotas e pontos de encontro' },
   { match: '/members/manage', title: 'Acesso', subtitle: 'Criar ou editar participante da viagem' },
@@ -16,6 +21,9 @@ const pageMeta = [
   { match: '/itinerary/new', title: 'Novo roteiro', subtitle: 'Adicione uma nova parada' },
   { match: '/itinerary/', title: 'Editar roteiro', subtitle: 'Ajuste horarios e status' },
   { match: '/itinerary', title: 'Roteiro', subtitle: 'Tudo o que vem pela frente' },
+  { match: '/attractions/new', title: 'Novo ponto turistico', subtitle: 'Adicione um lugar para conhecer' },
+  { match: '/attractions/', title: 'Editar ponto turistico', subtitle: 'Atualize os dados do local' },
+  { match: '/attractions', title: 'Pontos turisticos', subtitle: 'Lugares que a familia quer conhecer' },
   { match: '/tips', title: 'Dicas', subtitle: 'Aprendizados da familia' },
   { match: '/hotels/new', title: 'Nova hospedagem', subtitle: 'Salve reserva, valores e link do anuncio' },
   { match: '/hotels/', title: 'Editar hospedagem', subtitle: 'Atualize status e detalhes da reserva' },

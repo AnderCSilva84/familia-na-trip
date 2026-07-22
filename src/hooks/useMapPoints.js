@@ -219,8 +219,26 @@ function useMapPoints() {
       )
       .sort((left, right) => Number(right.isCurrentDay) - Number(left.isCurrentDay))
 
+    const retroactiveCityPoints = (trip?.cities ?? []).map((place, index) =>
+      normalizePoint(
+        {
+          id: `trip-city-${index}`,
+          title: [place.city, place.state].filter(Boolean).join(' - '),
+          description: `Cidade visitada na trip ${trip.name}`,
+          city: place.city,
+          location: [place.city, place.state, place.country].filter(Boolean).join(', '),
+          mapQuery: place.mapQuery ?? '',
+          latitude: place.latitude,
+          longitude: place.longitude,
+        },
+        'cidade_visitada',
+        fallbackPositions[index % fallbackPositions.length],
+      ),
+    )
+
     return consolidateDuplicateLocations([
       ...agendaPoints,
+      ...retroactiveCityPoints,
       ...hotels
         .map((hotel, index) =>
           normalizePoint(hotel, 'hotel', fallbackPositions[(index + 1) % fallbackPositions.length]),
@@ -250,7 +268,7 @@ function useMapPoints() {
         ),
       ...customPoints.map((point) => normalizePoint(point, point.sourceType || 'ponto')),
     ])
-  }, [agenda, customPoints, emergencyContacts, hotels, itinerary, tips, usingMockData, vehicles])
+  }, [agenda, customPoints, emergencyContacts, hotels, itinerary, tips, trip, usingMockData, vehicles])
 }
 
 export default useMapPoints

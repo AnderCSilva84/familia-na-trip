@@ -10,11 +10,11 @@ export const mockData = {
   },
   trip: {
     id: 'trip-1',
-    name: 'Maragogi em família',
-    destination: 'Maragogi, AL',
-    dateRange: '15 a 22 de jun',
+    name: 'Salvador em família',
+    destination: 'Salvador, BA',
+    dateRange: '18 a 29 de jul',
     progress: 68,
-    nextStop: 'Praia de Maragogi',
+    nextStop: 'Salvador',
     nextStopTime: 'Hoje, 15:30',
     summary:
       'Uma semana entre praias, passeios de buggy, comida boa e muitos registros para guardar.',

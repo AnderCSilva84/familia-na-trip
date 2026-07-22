@@ -3,6 +3,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   query,
   serverTimestamp,
   setDoc,
@@ -87,6 +88,19 @@ export async function getDiaryByTrip(tripId) {
       reject,
     )
   })
+}
+
+export async function getDiaryByTrips(tripIds = []) {
+  const uniqueIds = [...new Set(tripIds.filter(Boolean))]
+  if (uniqueIds.length === 0) return []
+
+  const snapshots = await Promise.all(
+    uniqueIds.map((tripId) => getDocs(query(diaryCollection(), where('tripId', '==', tripId)))),
+  )
+
+  return snapshots
+    .flatMap((snapshot) => snapshot.docs.map((entryDoc) => mapDiaryEntry(entryDoc.id, entryDoc.data())))
+    .sort((left, right) => String(right.date).localeCompare(String(left.date)))
 }
 
 export function subscribeDiaryByTrip(tripId, callback, onError) {
