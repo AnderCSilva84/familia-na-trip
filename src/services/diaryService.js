@@ -130,6 +130,19 @@ export async function updateDiaryEntry(id, data, files = []) {
   })
 }
 
+export async function deleteDiaryPhoto(entryId, remainingPhotos, photoPath = '') {
+  const diaryRef = doc(diaryCollection(), entryId)
+
+  await updateDoc(diaryRef, {
+    photos: remainingPhotos,
+    updatedAt: serverTimestamp(),
+  })
+
+  if (photoPath && storage) {
+    await deleteObject(ref(storage, photoPath)).catch(() => null)
+  }
+}
+
 export async function deleteDiaryEntry(id) {
   const diaryRef = doc(diaryCollection(), id)
   const snapshot = await getDoc(diaryRef)

@@ -7,7 +7,7 @@ import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
 import useAuth from '../../hooks/useAuth'
-import { formatDisplayDate } from '../../utils/formatters'
+import { formatCurrency, formatDisplayDate } from '../../utils/formatters'
 import { isSuperAdmin } from '../../utils/permissions'
 import { deleteTripCompletely } from '../../services/tripService'
 import TravelHistoryMapPage from '../Map/TravelHistoryMapPage'
@@ -66,6 +66,9 @@ function TripsPage() {
               <div className="space-y-2 text-sm text-slate-600">
                 <p className="flex items-center gap-2"><FiCalendar /> {formatDisplayDate(item.effectiveStartDate || item.startDate)} — {formatDisplayDate(item.effectiveEndDate || item.endDate)}</p>
                 <p className="flex items-center gap-2"><FiMapPin /> {item.cities?.length || 1} cidade(s)</p>
+                <p className="rounded-2xl bg-amber-50 px-3 py-2 font-semibold text-amber-800">
+                  Cofrinho da Trip: {formatCurrency(item.tripFund ?? 0)}
+                </p>
               </div>
               <Button className="w-full" variant={item.id === activeTrip?.id ? 'secondary' : 'primary'} onClick={() => openTrip(item)}>
                 {item.id === activeTrip?.id ? 'Viagem selecionada' : 'Abrir viagem'}

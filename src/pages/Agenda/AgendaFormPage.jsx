@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -8,67 +8,97 @@ import Loading from '../../components/common/Loading'
 import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useAgenda from '../../hooks/useAgenda'
-import useMembers from '../../hooks/useMembers'
+import useAuth from '../../hooks/useAuth'
+import useWallet from '../../hooks/useWallet'
+import { updateTrip } from '../../services/tripService'
 import useAppStore from '../../store/useAppStore'
-import { canEditAnyContent } from '../../utils/permissions'
 import { formatDateInput } from '../../utils/formatters'
-import { getLinkPreviewData } from '../../utils/linkPreview'
-import { resolveMapMetadata } from '../../utils/locationPresets'
+import { canEditAnyContent, isSuperAdmin } from '../../utils/permissions'
 
 const types = [
   { value: 'evento', label: 'Evento' },
   { value: 'roteiro', label: 'Roteiro' },
-  { value: 'ponto_turistico', label: 'Ponto turistico' },
+  { value: 'ponto_turistico', label: 'Ponto turístico' },
   { value: 'alarme', label: 'Alarme' },
   { value: 'hotel', label: 'Hospedagem' },
-  { value: 'veiculo', label: 'Veiculo' },
+  { value: 'veiculo', label: 'Veículo' },
   { value: 'outro', label: 'Outro' },
 ]
 
-function clampPercentage(value) {
-  return Math.min(95, Math.max(5, value))
+function getWeekday(date) {
+  if (!date) return ''
+  const parsedDate = new Date(`${date}T12:00:00`)
+  if (Number.isNaN(parsedDate.getTime())) return ''
+  return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(parsedDate)
 }
 
-function getMemberTargetValue(member) {
-  return member.userId || member.email || member.id
+function formatBrazilianDate(value) {
+  const [year, month, day] = String(value ?? '').split('-')
+  return year && month && day ? `${day}/${month}/${year}` : ''
 }
 
-function memberMatchesTarget(member, target) {
-  const normalizedTarget = String(target ?? '').trim().toLowerCase()
-
-  return [member.userId, member.email, member.name, member.id]
-    .map((value) => String(value ?? '').trim().toLowerCase())
-    .filter(Boolean)
-    .includes(normalizedTarget)
+function parseBrazilianDate(value) {
+  const match = String(value ?? '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!match) return ''
+  const [, day, month, year] = match
+  const isoDate = `${year}-${month}-${day}`
+  const parsed = new Date(`${isoDate}T12:00:00`)
+  return !Number.isNaN(parsed.getTime())
+    && parsed.getDate() === Number(day)
+    && parsed.getMonth() + 1 === Number(month) ? isoDate : ''
 }
 
-function AgendaFormContent({ editingEvent, eventId, usingMockData, create, update, members, navigate, canManageValues }) {
+function maskDate(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 8)
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/')
+}
+
+function normalizeTime24(value) {
+  const match = String(value ?? '').match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+  return match ? match[0] : ''
+}
+
+function AgendaFormContent({
+  editingEvent,
+  eventId,
+  usingMockData,
+  create,
+  update,
+  navigate,
+  canManageValues,
+  userProfile,
+  trip,
+  onTripUpdate,
+}) {
+  const { documents, loading: walletLoading, error: walletError } = useWallet()
   const initialEvent = editingEvent ?? null
-  const [submitting, setSubmitting] = useState(false)
-  const [feedback, setFeedback] = useState('')
+  const initialDate = formatDateInput(initialEvent?.date)
+  const [dateText, setDateText] = useState(formatBrazilianDate(initialDate))
+  const date = parseBrazilianDate(dateText)
   const [selectedType, setSelectedType] = useState(initialEvent?.type ?? 'evento')
-  const [notifyMembers, setNotifyMembers] = useState(Boolean(initialEvent?.notifyMembers))
-  const [alarmTime, setAlarmTime] = useState(initialEvent?.alarmTime ?? initialEvent?.startTime ?? '')
-  const [selectedMembers, setSelectedMembers] = useState(initialEvent?.membersToNotify ?? [])
+  const [customTypeName, setCustomTypeName] = useState('')
+  const [savingType, setSavingType] = useState(false)
+  const [selectedWalletId, setSelectedWalletId] = useState(initialEvent?.walletDocumentId ?? '')
   const [selectedImage, setSelectedImage] = useState(null)
-  const [reservationLink, setReservationLink] = useState(initialEvent?.link ?? '')
   const [manualImageUrl, setManualImageUrl] = useState(initialEvent?.image ?? '')
   const [imagePreview, setImagePreview] = useState(initialEvent?.image ?? '')
+  const [submitting, setSubmitting] = useState(false)
+  const [feedback, setFeedback] = useState('')
   const previewUrlRef = useRef('')
-  const [mapPosition, setMapPosition] = useState(() => ({
-    x: Number(resolveMapMetadata(initialEvent ?? {}).mapX ?? 52) || 52,
-    y: Number(resolveMapMetadata(initialEvent ?? {}).mapY ?? 58) || 58,
-    enabled: Boolean(resolveMapMetadata(initialEvent ?? {}).mapX && resolveMapMetadata(initialEvent ?? {}).mapY),
-  }))
+  const weekday = getWeekday(date)
+  const availableTypes = [
+    ...types,
+    ...(trip?.agendaTypes ?? []).map((type) => ({ value: type.value, label: type.label })),
+  ].filter((type, index, list) => list.findIndex((item) => item.value === type.value) === index)
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+  }, [])
 
   function handleImageChange(event) {
     const nextFile = event.target.files?.[0] ?? null
-
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current)
-      previewUrlRef.current = ''
-    }
-
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+    previewUrlRef.current = ''
     setSelectedImage(nextFile)
 
     if (!nextFile) {
@@ -76,22 +106,8 @@ function AgendaFormContent({ editingEvent, eventId, usingMockData, create, updat
       return
     }
 
-    const objectUrl = URL.createObjectURL(nextFile)
-    previewUrlRef.current = objectUrl
-    setImagePreview(objectUrl)
-  }
-
-  async function handleLinkBlur() {
-    if (!reservationLink || selectedImage || manualImageUrl) {
-      return
-    }
-
-    const previewData = await getLinkPreviewData(reservationLink)
-
-    if (previewData?.image) {
-      setManualImageUrl(previewData.image)
-      setImagePreview(previewData.image)
-    }
+    previewUrlRef.current = URL.createObjectURL(nextFile)
+    setImagePreview(previewUrlRef.current)
   }
 
   async function handleSubmit(event) {
@@ -100,228 +116,217 @@ function AgendaFormContent({ editingEvent, eventId, usingMockData, create, updat
     setFeedback('')
 
     try {
+      if (!date) throw new Error('Informe uma data válida no formato DD/MM/AAAA.')
       const formData = new FormData(event.currentTarget)
+      const startTime = normalizeTime24(formData.get('startTime'))
+      const endTime = normalizeTime24(formData.get('endTime'))
+      if (formData.get('startTime') && !startTime) throw new Error('Informe a hora de início no formato 24h (HH:MM).')
+      if (formData.get('endTime') && !endTime) throw new Error('Informe a hora de término no formato 24h (HH:MM).')
+      const walletDocument = documents.find((document) => document.id === selectedWalletId)
       const payload = {
-        title: String(formData.get('title') ?? ''),
-        weekday: String(formData.get('weekday') ?? ''),
-        city: String(formData.get('city') ?? ''),
-        local: String(formData.get('local') ?? ''),
-        address: String(formData.get('address') ?? ''),
-        postalCode: String(formData.get('postalCode') ?? ''),
-        description: String(formData.get('description') ?? ''),
-        date: String(formData.get('date') ?? ''),
-        startTime: String(formData.get('startTime') ?? ''),
-        endTime: '',
-        location: String(formData.get('location') ?? ''),
-        estimatedCost: canManageValues ? Number(formData.get('estimatedCost') ?? 0) || 0 : Number(initialEvent?.estimatedCost ?? 0),
-        actualCost: canManageValues ? Number(formData.get('actualCost') ?? 0) || 0 : Number(initialEvent?.actualCost ?? 0),
+        title: String(formData.get('title') ?? '').trim(),
+        weekday,
+        date,
+        city: String(formData.get('city') ?? '').trim(),
+        local: String(formData.get('local') ?? '').trim(),
+        address: String(formData.get('address') ?? '').trim(),
+        postalCode: String(formData.get('postalCode') ?? '').trim(),
+        description: String(formData.get('description') ?? '').trim(),
+        instructions: String(formData.get('instructions') ?? '').trim(),
+        startTime,
+        endTime,
+        estimatedCost: canManageValues
+          ? Number(formData.get('estimatedCost') ?? 0) || 0
+          : Number(initialEvent?.estimatedCost ?? 0),
+        actualCost: canManageValues
+          ? Number(formData.get('actualCost') ?? 0) || 0
+          : Number(initialEvent?.actualCost ?? 0),
+        latitude: String(formData.get('latitude') ?? '').trim(),
+        longitude: String(formData.get('longitude') ?? '').trim(),
+        location: [formData.get('city'), formData.get('local')].filter(Boolean).join(' - '),
         expenseCategory: initialEvent?.expenseCategory ?? 'Outros',
-        createdBy: initialEvent?.createdBy ?? '',
-        link: reservationLink,
-        image: selectedImage ? initialEvent?.image ?? '' : manualImageUrl.trim() || initialEvent?.image || '',
+        type: selectedType,
+        walletDocumentId: walletDocument?.id ?? '',
+        walletDocumentName: walletDocument?.name || walletDocument?.fileName || '',
+        walletDocumentUrl: walletDocument?.url ?? '',
+        createdBy: initialEvent?.createdBy || userProfile.uid,
+        creatorName: initialEvent ? (initialEvent.creatorName ?? '') : userProfile.name,
+        creatorPhotoURL: initialEvent ? (initialEvent.creatorPhotoURL ?? '') : userProfile.photoURL,
+        link: initialEvent?.link ?? '',
+        image: selectedImage ? initialEvent?.image ?? '' : manualImageUrl.trim(),
         imagePath: initialEvent?.imagePath ?? '',
         imageFile: selectedImage,
         currentImagePath: initialEvent?.imagePath ?? '',
-        mapX: mapPosition.enabled ? String(Math.round(mapPosition.x)) : '',
-        mapY: mapPosition.enabled ? String(Math.round(mapPosition.y)) : '',
-        type: selectedType,
-        notifyMembers: selectedType === 'alarme' ? notifyMembers : false,
-        membersToNotify: selectedType === 'alarme' && notifyMembers ? selectedMembers : [],
-        alarmTime: selectedType === 'alarme' ? alarmTime : '',
-        relatedId: String(formData.get('relatedId') ?? ''),
+        notifyMembers: false,
+        membersToNotify: [],
+        alarmTime: selectedType === 'alarme' ? startTime : '',
+        relatedId: initialEvent?.relatedId ?? '',
       }
 
-      if (eventId) {
-        await update(eventId, payload)
-      } else {
-        await create(payload)
-      }
-
+      if (eventId) await update(eventId, payload)
+      else await create(payload)
       navigate('/agenda')
     } catch (submitError) {
-      setFeedback(submitError.message ?? 'Nao foi possivel salvar o evento.')
+      setFeedback(submitError.message ?? 'Não foi possível salvar o evento.')
     } finally {
       setSubmitting(false)
     }
   }
 
-  function handleMapPick(event) {
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = clampPercentage(((event.clientX - rect.left) / rect.width) * 100)
-    const y = clampPercentage(((event.clientY - rect.top) / rect.height) * 100)
+  async function handleAddType() {
+    const label = customTypeName.trim()
+    if (!label || !trip?.id) return
+    const value = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    if (!value) return
 
-    setMapPosition({
-      x,
-      y,
-      enabled: true,
-    })
-  }
-
-  function clearMapPosition() {
-    setMapPosition((current) => ({
-      ...current,
-      enabled: false,
-    }))
-  }
-
-  function toggleMember(memberName) {
-    setSelectedMembers((current) =>
-      current.includes(memberName)
-        ? current.filter((item) => item !== memberName)
-        : [...current, memberName],
-    )
+    setSavingType(true)
+    setFeedback('')
+    try {
+      const agendaTypes = [...(trip.agendaTypes ?? []).filter((type) => type.value !== value), { value, label }]
+      const updatedTrip = await updateTrip(trip.id, { agendaTypes })
+      onTripUpdate(updatedTrip)
+      setSelectedType(value)
+      setCustomTypeName('')
+    } catch (typeError) {
+      setFeedback(typeError.message ?? 'Não foi possível criar o tipo.')
+    } finally {
+      setSavingType(false)
+    }
   }
 
   return (
     <div className="space-y-4">
       <StatusMessage
-        message={usingMockData ? 'Modo mock ativo. O formulario serve como fallback visual.' : feedback}
+        message={usingMockData ? 'Modo mock ativo. O formulário serve como fallback visual.' : feedback}
         tone={usingMockData ? 'info' : 'error'}
       />
       <Card>
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input name="title" label="Titulo" defaultValue={initialEvent?.title ?? ''} required />
-          {canManageValues ? <div className="grid gap-3 sm:grid-cols-2">
-            <Input name="weekday" label="Dia da semana" defaultValue={initialEvent?.weekday ?? ''} />
-            <Input name="city" label="Cidade" defaultValue={initialEvent?.city ?? ''} />
-          </div> : null}
-          <Input name="local" label="Local / parada" defaultValue={initialEvent?.local ?? initialEvent?.title ?? ''} />
+        <div className="mb-6">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-700">Agenda da viagem</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            {eventId ? 'Editar evento' : 'Cadastrar evento'}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Reúna aqui horários, localização, custos, documento e orientações importantes.
+          </p>
+        </div>
+
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <Input name="title" label="Título" defaultValue={initialEvent?.title ?? ''} required />
+
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input name="address" label="Endereco" defaultValue={initialEvent?.address ?? ''} placeholder="Rua, avenida, numero..." />
+            <Input
+              name="dateDisplay"
+              label="Data (DD/MM/AAAA)"
+              value={dateText}
+              onChange={(event) => setDateText(maskDate(event.target.value))}
+              inputMode="numeric"
+              placeholder="DD/MM/AAAA"
+              maxLength="10"
+              required
+            />
+            <Input name="weekday" label="Dia da semana" value={weekday} readOnly placeholder="Preenchido pela data" />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input name="city" label="Cidade" defaultValue={initialEvent?.city ?? ''} required />
+            <Input name="local" label="Local" defaultValue={initialEvent?.local ?? ''} />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Input name="address" label="Endereço" defaultValue={initialEvent?.address ?? ''} placeholder="Rua, avenida, número..." />
             <Input name="postalCode" label="CEP" defaultValue={initialEvent?.postalCode ?? ''} placeholder="00000-000" />
           </div>
+
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
-            <span>Descricao</span>
+            <span>Descrição</span>
             <textarea
               name="description"
               defaultValue={initialEvent?.description ?? ''}
               className="min-h-28 rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             />
           </label>
-          <Input name="date" label="Data" type="date" defaultValue={formatDateInput(initialEvent?.date)} required />
-          <Input name="startTime" label="Horario do evento" type="time" step="1" defaultValue={initialEvent?.startTime ?? ''} />
-          <Input
-            name="location"
-            label="Local / cidade"
-            defaultValue={initialEvent?.location ?? ''}
-            placeholder="Ex: Salvador - Praia do Forte"
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              name="estimatedCost"
-              label="Gasto estimado"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={initialEvent?.estimatedCost ?? ''}
+
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+            <span>Instruções ou observações</span>
+            <textarea
+              name="instructions"
+              defaultValue={initialEvent?.instructions ?? ''}
+              placeholder="Ex.: chegar 30 minutos antes, levar documento, ponto de encontro..."
+              className="min-h-24 rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-slate-900 outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
             />
-            <Input
-              name="actualCost"
-              label="Gasto real"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={initialEvent?.actualCost ?? ''}
-            />
+          </label>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-slate-600">Horário do evento</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input name="startTime" label="Hora de início (24h)" defaultValue={String(initialEvent?.startTime ?? '').slice(0, 5)} inputMode="numeric" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxLength="5" />
+              <Input name="endTime" label="Hora de término (24h)" defaultValue={String(initialEvent?.endTime ?? '').slice(0, 5)} inputMode="numeric" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxLength="5" />
+            </div>
           </div>
-          <Input
-            name="link"
-            label="Link da reserva ou plataforma"
-            value={reservationLink}
-            onChange={(event) => setReservationLink(event.target.value)}
-            onBlur={handleLinkBlur}
-            placeholder="Ex: Booking, Airbnb, site do passeio..."
-          />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input name="estimatedCost" label="Gasto estimado" type="number" min="0" step="0.01" defaultValue={initialEvent?.estimatedCost ?? ''} disabled={!canManageValues} />
+            <Input name="actualCost" label="Gasto real" type="number" min="0" step="0.01" defaultValue={initialEvent?.actualCost ?? ''} disabled={!canManageValues} />
+          </div>
+
+          <div className="rounded-3xl bg-sky-50 p-4">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+              <span>Documento da carteira</span>
+              <select
+                value={selectedWalletId}
+                onChange={(event) => setSelectedWalletId(event.target.value)}
+                disabled={walletLoading}
+                className="w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+              >
+                <option value="">{walletLoading ? 'Carregando carteira...' : 'Nenhum documento vinculado'}</option>
+                {documents.map((document) => (
+                  <option key={document.id} value={document.id}>
+                    {document.name || document.fileName || 'Documento PDF'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="mt-2 text-xs text-slate-500">
+              Selecione um PDF de reserva ou outro documento já salvo na carteira da viagem.
+            </p>
+            {walletError ? <p className="mt-2 text-xs text-rose-600">{walletError}</p> : null}
+          </div>
 
           <div className="space-y-3 rounded-3xl bg-slate-50 p-4">
             <div>
-              <h3 className="text-base font-semibold text-slate-950">Foto do evento</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Cada parada pode ter sua propria imagem. Voce pode subir do celular ou colar a URL da capa.
-              </p>
+              <h3 className="font-semibold text-slate-950">Foto do evento</h3>
+              <p className="mt-1 text-sm text-slate-500">Use um link ou escolha uma imagem do celular.</p>
             </div>
-
             {imagePreview ? (
-              <img
-                src={imagePreview}
-                alt={initialEvent?.title ?? 'Preview do evento'}
-                loading="lazy"
-                decoding="async"
-                className="h-48 w-full rounded-[28px] object-cover"
-              />
+              <img src={imagePreview} alt="Prévia do evento" className="h-48 w-full rounded-[28px] object-cover" />
             ) : (
               <div className="flex h-40 items-center justify-center rounded-[28px] border border-dashed border-slate-200 bg-white text-sm text-slate-400">
-                Nenhuma imagem selecionada para este evento
+                Nenhuma foto selecionada
               </div>
             )}
-
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
-              <span>Upload da foto</span>
-              <input
-                name="eventImage"
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none transition file:mr-3 file:rounded-full file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-teal-700 focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
-              />
-            </label>
-
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm file:mr-3 file:rounded-full file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-teal-700"
+            />
             <Input
               name="imageUrl"
-              label="Ou use uma imagem por URL"
+              label="Ou informe o link da foto"
               value={manualImageUrl}
               onChange={(event) => {
                 setManualImageUrl(event.target.value)
-                if (!selectedImage) {
-                  setImagePreview(event.target.value)
-                }
+                if (!selectedImage) setImagePreview(event.target.value)
               }}
               placeholder="https://..."
             />
           </div>
 
-          <div className="space-y-3 rounded-3xl bg-slate-50 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-semibold text-slate-950">Posicao no mapa</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Se voce preencher endereco e CEP, o app ja usa isso como destino no Google Maps e no Waze. O `X/Y` continua sendo a posicao visual dentro do mapa do app.
-                </p>
-              </div>
-              {mapPosition.enabled ? (
-                <Button type="button" variant="ghost" className="text-slate-500 hover:bg-white" onClick={clearMapPosition}>
-                  Limpar
-                </Button>
-              ) : null}
-            </div>
-
-            <button
-              type="button"
-              onClick={handleMapPick}
-              className="relative h-52 w-full overflow-hidden rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#d8f3dc_0%,#effbf6_100%)] text-left"
-            >
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(15,118,110,0.18),transparent_28%),radial-gradient(circle_at_80%_24%,rgba(255,255,255,0.9),transparent_22%),linear-gradient(120deg,rgba(56,189,248,0.2),transparent_45%)]" />
-              <div className="absolute left-[32%] top-[14%] h-[68%] w-[32%] rounded-[120px] border-[16px] border-white/65" />
-              <div className="absolute inset-y-0 left-[48%] w-1 rounded-full bg-white/60" />
-
-              {mapPosition.enabled ? (
-                <div
-                  className="absolute flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-teal-600 text-sm font-semibold text-white shadow-lg"
-                  style={{ left: `${mapPosition.x}%`, top: `${mapPosition.y}%` }}
-                >
-                  +
-                </div>
-              ) : (
-                <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-white/90 px-4 py-3 text-sm text-slate-500 shadow-sm">
-                  Toque para marcar onde esse evento aparece no mapa da viagem.
-                </div>
-              )}
-            </button>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Input name="mapX" label="Posicao X (%)" value={mapPosition.enabled ? String(Math.round(mapPosition.x)) : ''} readOnly />
-              <Input name="mapY" label="Posicao Y (%)" value={mapPosition.enabled ? String(Math.round(mapPosition.y)) : ''} readOnly />
-            </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input name="latitude" label="Latitude" type="number" step="any" defaultValue={initialEvent?.latitude ?? ''} placeholder="-12.9714" />
+            <Input name="longitude" label="Longitude" type="number" step="any" defaultValue={initialEvent?.longitude ?? ''} placeholder="-38.5014" />
           </div>
 
           <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
@@ -332,74 +337,43 @@ function AgendaFormContent({ editingEvent, eventId, usingMockData, create, updat
               onChange={(event) => setSelectedType(event.target.value)}
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             >
-              {types.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
+              {availableTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </select>
           </label>
-
-          {selectedType === 'alarme' ? (
-            <div className="space-y-4 rounded-3xl bg-slate-50 p-4">
-              <div>
-                <h3 className="text-base font-semibold text-slate-950">Configuracao do alarme</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  O evento continua na agenda e tambem cria um alarme real dentro do app.
-                </p>
-              </div>
-
-              <Input
-                name="alarmTime"
-                label="Horario do lembrete"
-                type="time"
-                step="1"
-                value={alarmTime}
-                onChange={(event) => setAlarmTime(event.target.value)}
-                required={selectedType === 'alarme'}
+          {isSuperAdmin(userProfile) ? (
+            <div className="flex gap-2 rounded-3xl bg-teal-50 p-3">
+              <input
+                value={customTypeName}
+                onChange={(event) => setCustomTypeName(event.target.value)}
+                placeholder="Novo tipo: Combustível, transporte..."
+                className="min-w-0 flex-1 rounded-2xl border border-teal-200 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500"
               />
-
-              <label className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={notifyMembers}
-                  onChange={(event) => setNotifyMembers(event.target.checked)}
-                />
-                Notificar membros selecionados
-              </label>
-
-              {notifyMembers ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-600">Membros para notificar</p>
-                  <div className="flex flex-wrap gap-2">
-                    {members.map((member) => {
-                      const memberValue = getMemberTargetValue(member)
-                      const selected = selectedMembers.some((item) => memberMatchesTarget(member, item))
-
-                      return (
-                        <button
-                          key={member.id}
-                          type="button"
-                          onClick={() => toggleMember(memberValue)}
-                          className={`rounded-full px-4 py-2 text-sm font-medium ${
-                            selected ? 'bg-teal-700 text-white' : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {member.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
+              <Button type="button" onClick={handleAddType} disabled={!customTypeName.trim() || savingType}>
+                {savingType ? 'Criando...' : 'Criar tipo'}
+              </Button>
             </div>
           ) : null}
 
-          <Input name="relatedId" label="ID relacionado (opcional)" defaultValue={initialEvent?.relatedId ?? ''} />
+          <div className="rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Responsável pelo registro</p>
+            <div className="mt-3 flex items-center gap-3">
+              {(initialEvent?.creatorPhotoURL || (!initialEvent && userProfile.photoURL)) ? (
+                <img src={initialEvent?.creatorPhotoURL || userProfile.photoURL} alt="" className="h-11 w-11 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-teal-100 font-semibold text-teal-700">
+                  {userProfile.name?.charAt(0)?.toUpperCase() || 'U'}
+                </span>
+              )}
+              <p className="text-sm text-slate-600">
+                Evento criado por <strong className="text-slate-900">
+                  {initialEvent ? (initialEvent.creatorName || 'membro não identificado no registro antigo') : userProfile.name}
+                </strong>
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <Button type="button" variant="secondary" onClick={() => navigate('/agenda')}>
-              Cancelar
-            </Button>
+            <Button type="button" variant="secondary" onClick={() => navigate('/agenda')}>Cancelar</Button>
             <Button type="submit" disabled={submitting || usingMockData}>
               {submitting ? 'Salvando...' : eventId ? 'Atualizar' : 'Salvar'}
             </Button>
@@ -414,14 +388,19 @@ function AgendaFormPage() {
   const navigate = useNavigate()
   const { eventId } = useParams()
   const { agenda, loading, error, usingMockData, create, update } = useAgenda()
-  const { members } = useMembers()
+  const { trip, trips, setTrip, setTrips } = useAuth()
   const userProfile = useAppStore((state) => state.userProfile)
   const editingEvent = agenda.find((item) => item.id === eventId)
+
+  function handleTripUpdate(updatedTrip) {
+    setTrip(updatedTrip)
+    setTrips(trips.map((item) => item.id === updatedTrip.id ? { ...item, ...updatedTrip } : item))
+  }
 
   if (loading) return <Loading />
   if (error) return <ErrorState title="Falha ao abrir agenda" description={error} />
   if (eventId && !editingEvent && !usingMockData) {
-    return <EmptyState title="Evento nao encontrado" description="Esse evento pode ter sido removido." />
+    return <EmptyState title="Evento não encontrado" description="Esse evento pode ter sido removido." />
   }
 
   return (
@@ -432,9 +411,11 @@ function AgendaFormPage() {
       usingMockData={usingMockData}
       create={create}
       update={update}
-      members={members}
       navigate={navigate}
       canManageValues={canEditAnyContent(userProfile)}
+      userProfile={userProfile}
+      trip={trip}
+      onTripUpdate={handleTripUpdate}
     />
   )
 }

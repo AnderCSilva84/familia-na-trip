@@ -75,13 +75,17 @@ function applyAgendaTimeHeuristics(timeValue, item = {}) {
 async function enrichAgendaLocationData(item) {
   const mapMetadata = resolveMapMetadata(item)
   const geocoded = await geocodeLocation(item)
+  const manualLatitude = Number(item.latitude)
+  const manualLongitude = Number(item.longitude)
+  const hasManualCoordinates = Number.isFinite(manualLatitude) && Number.isFinite(manualLongitude)
+    && String(item.latitude).trim() !== '' && String(item.longitude).trim() !== ''
 
   return {
     mapX: item.mapX ?? mapMetadata.mapX,
     mapY: item.mapY ?? mapMetadata.mapY,
     mapQuery: geocoded.mapQuery || item.mapQuery || mapMetadata.mapQuery,
-    latitude: geocoded.latitude,
-    longitude: geocoded.longitude,
+    latitude: hasManualCoordinates ? manualLatitude : geocoded.latitude,
+    longitude: hasManualCoordinates ? manualLongitude : geocoded.longitude,
   }
 }
 
@@ -93,6 +97,7 @@ function mapAgendaItem(id, data) {
     tripId: data.tripId ?? '',
     title: data.title ?? '',
     description: data.description ?? '',
+    instructions: data.instructions ?? '',
     weekday: data.weekday ?? '',
     city: data.city ?? '',
     local: data.local ?? '',
@@ -107,6 +112,9 @@ function mapAgendaItem(id, data) {
     expenseCategory: data.expenseCategory ?? 'Outros',
     location: data.location ?? '',
     link: data.link ?? '',
+    walletDocumentId: data.walletDocumentId ?? '',
+    walletDocumentName: data.walletDocumentName ?? '',
+    walletDocumentUrl: data.walletDocumentUrl ?? '',
     image: getDefaultEventImage({
       title: data.title,
       description: data.description,
@@ -129,6 +137,8 @@ function mapAgendaItem(id, data) {
     importSheetName: data.importSheetName ?? '',
     importKey: data.importKey ?? '',
     createdBy: data.createdBy ?? '',
+    creatorName: data.creatorName ?? '',
+    creatorPhotoURL: data.creatorPhotoURL ?? '',
     createdAt: data.createdAt ?? null,
     updatedAt: data.updatedAt ?? null,
   }
@@ -174,6 +184,7 @@ export async function createAgendaEvent(data, imageFile = null) {
     tripId: eventData.tripId,
     title: eventData.title,
     description: eventData.description ?? '',
+    instructions: eventData.instructions ?? '',
     weekday: eventData.weekday ?? '',
     city: eventData.city ?? '',
     local: eventData.local ?? '',
@@ -188,6 +199,9 @@ export async function createAgendaEvent(data, imageFile = null) {
     expenseCategory: eventData.expenseCategory ?? 'Outros',
     location: eventData.location ?? '',
     link: eventData.link ?? '',
+    walletDocumentId: eventData.walletDocumentId ?? '',
+    walletDocumentName: eventData.walletDocumentName ?? '',
+    walletDocumentUrl: eventData.walletDocumentUrl ?? '',
     image: getDefaultEventImage({
       title: eventData.title,
       description: eventData.description,
@@ -207,6 +221,8 @@ export async function createAgendaEvent(data, imageFile = null) {
     alarmId: eventData.alarmId ?? '',
     relatedId: eventData.relatedId ?? '',
     createdBy: eventData.createdBy,
+    creatorName: eventData.creatorName ?? '',
+    creatorPhotoURL: eventData.creatorPhotoURL ?? '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   }

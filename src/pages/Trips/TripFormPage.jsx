@@ -131,6 +131,8 @@ function TripFormPage() {
         endDate,
         coverImage: String(form.get('coverImage')).trim(),
         totalBudget: Number(form.get('totalBudget') || 0),
+        tripFund: Number(form.get('tripFund') || 0),
+        agendaTypes: editingTrip?.agendaTypes ?? [],
         status: String(form.get('status')),
         cities,
         createdBy: editingTrip?.createdBy || userProfile.uid,
@@ -180,10 +182,12 @@ function TripFormPage() {
           <Input required type="date" name="startDate" label="Data inicial" defaultValue={editingTrip?.startDate ?? ''} />
           <Input required type="date" name="endDate" label="Data final" defaultValue={editingTrip?.endDate ?? ''} />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input type="number" min="0" step="0.01" name="totalBudget" label="Orçamento" defaultValue={editingTrip?.totalBudget ?? 0} />
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Input type="number" min="0" step="0.01" name="totalBudget" label="Orçamento previsto" defaultValue={editingTrip?.totalBudget ?? 0} />
+          <Input type="number" min="0" step="0.01" name="tripFund" label="Cofrinho da Trip" defaultValue={editingTrip?.tripFund ?? 0} />
           <Input name="coverImage" label="Foto de capa (URL)" defaultValue={editingTrip?.coverImage ?? ''} />
         </div>
+        <p className="-mt-2 text-xs text-slate-500">O Cofrinho registra quanto a família já possui em caixa para esta viagem.</p>
         <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
           <span>Escolher foto da galeria</span>
           <input
