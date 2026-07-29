@@ -17,6 +17,7 @@ function HotelsPage() {
   const [feedback, setFeedback] = useState('')
 
   async function handleDelete(hotelId) {
+    if (!window.confirm('Tem certeza que deseja excluir esta hospedagem?')) return
     try {
       await remove(hotelId)
       setFeedback('Hospedagem removida com sucesso.')

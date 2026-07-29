@@ -23,6 +23,7 @@ function EmergencyPage() {
   const canManage = canEditAnyContent(userProfile)
 
   async function handleDelete(contactId) {
+    if (!window.confirm('Tem certeza que deseja excluir este contato de emergência?')) return
     try {
       await remove(contactId)
       setFeedback('Contato de emergencia removido com sucesso.')

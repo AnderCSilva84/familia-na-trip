@@ -74,7 +74,15 @@ function matchesExpenseFilter(expense, filterId) {
 function ExpensesPage() {
   const navigate = useNavigate()
   const { userProfile, trip } = useAuth()
-  const { expenses, summary, loading, error, deleteExpense, usingMockData } = useExpenses()
+  const {
+    expenses,
+    summary,
+    loading,
+    error,
+    deleteExpense,
+    migratePaymentsToTravelCard,
+    usingMockData,
+  } = useExpenses()
   const setTrip = useAppStore((state) => state.setTrip)
   const [feedback, setFeedback] = useState('')
   const [activeFilter, setActiveFilter] = useState('todos')
@@ -82,11 +90,12 @@ function ExpensesPage() {
   const [editingBudget, setEditingBudget] = useState(false)
   const [budgetInput, setBudgetInput] = useState('')
   const [savingBudget, setSavingBudget] = useState(false)
+  const [migratingPayments, setMigratingPayments] = useState(false)
   const totalBase = summary.totalEstimated || summary.totalActual || 1
   const actualPercentage = clampPercentage(Math.round((summary.totalActual / totalBase) * 100))
   const totalBudget = Number(trip?.totalBudget ?? 0)
   const remainingEstimatedBudget = totalBudget - summary.totalEstimated
-  const remainingActualBudget = totalBudget - summary.totalActual
+  const remainingActualBudget = totalBudget - summary.totalTravelCardActual
   const availableCategories = [...new Set(expenses.map((expense) => expense.category).filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'pt-BR'))
   const filteredExpenses = expenses.filter(
@@ -101,7 +110,9 @@ function ExpensesPage() {
         (expense) =>
           expense.category === activeCategory &&
           expense.type !== 'estimado' &&
-          (expense.relatedAgendaId || expense.settled),
+          (expense.relatedAgendaId || expense.settled) &&
+          String(expense.paidBy ?? '').trim().toLocaleLowerCase('pt-BR')
+            === 'cartão viagem'.toLocaleLowerCase('pt-BR'),
       )
       .reduce((total, expense) => total + Number(expense.value ?? 0), 0)
   const selectedCategoryBudgetPercentage = totalBudget > 0
@@ -135,6 +146,7 @@ function ExpensesPage() {
   }
 
   async function handleDelete(expenseId) {
+    if (!window.confirm('Tem certeza que deseja excluir este gasto?')) return
     try {
       await deleteExpense(expenseId)
       setFeedback('Gasto removido com sucesso.')
@@ -143,9 +155,31 @@ function ExpensesPage() {
     }
   }
 
+  async function handleMigratePayments() {
+    if (!window.confirm('Definir “Cartão viagem” como pagador de todos os gastos efetivados desta viagem?')) {
+      return
+    }
+
+    setMigratingPayments(true)
+    setFeedback('')
+    try {
+      const updatedCount = await migratePaymentsToTravelCard()
+      setFeedback(`${updatedCount} gasto(s) efetivado(s) migrado(s) com sucesso para Cartão viagem.`)
+    } catch (migrationError) {
+      setFeedback(migrationError.message ?? 'Nao foi possivel migrar os pagamentos.')
+    } finally {
+      setMigratingPayments(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+        {canEditAnyContent(userProfile) ? (
+          <Button variant="secondary" onClick={handleMigratePayments} disabled={migratingPayments || usingMockData}>
+            {migratingPayments ? 'Migrando...' : 'Migrar efetivados para Cartão viagem'}
+          </Button>
+        ) : null}
         {canCreateContent(userProfile) ? <Button onClick={() => navigate('/expenses/new')}>Novo gasto</Button> : null}
       </div>
 
@@ -236,7 +270,7 @@ function ExpensesPage() {
       <Card className="overflow-hidden bg-[linear-gradient(135deg,#f8fffd_0%,#ffffff_100%)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <p className="text-sm text-slate-500">Saldo da viagem</p>
+            <p className="text-sm text-slate-500">Saldo do Cartão viagem</p>
             <h3 className="mt-1 break-words text-3xl font-semibold leading-tight text-slate-950 sm:text-xl">
               {formatCurrency(remainingActualBudget)}
             </h3>
@@ -374,7 +408,7 @@ function ExpensesPage() {
             />
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Considera somente gastos efetivados com baixa confirmada.
+            Considera somente gastos efetivados no Cartão viagem com baixa confirmada.
           </p>
         </Card>
       ) : null}

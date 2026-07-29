@@ -13,7 +13,7 @@ import {
 import { db, ensureFirebaseConfigured } from '../firebase/config'
 import { resolveMapMetadata } from '../utils/locationPresets'
 import { createAgendaEvent } from './agendaService'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 import { geocodeLocation } from './geocodeService'
 
@@ -111,6 +111,9 @@ export async function createVehicleRental(data) {
         date: payload.pickupDate,
         startTime: '09:00',
         location: payload.pickupLocation,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        mapQuery: payload.mapQuery,
         type: 'veiculo',
         relatedId: vehicleRef.id,
         createdBy: payload.createdBy,
@@ -122,6 +125,9 @@ export async function createVehicleRental(data) {
         date: payload.returnDate,
         startTime: '18:00',
         location: payload.returnLocation,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        mapQuery: payload.mapQuery,
         type: 'veiculo',
         relatedId: vehicleRef.id,
         createdBy: payload.createdBy,
@@ -130,7 +136,7 @@ export async function createVehicleRental(data) {
   }
 
   if (payload.status === 'reservado' || payload.status === 'pago') {
-    await createNotification({
+    queueNotification({
       tripId: payload.tripId,
       title: 'Veiculo atualizado',
       message: `${payload.vehicleModel} esta ${payload.status}.`,

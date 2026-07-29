@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { mockData } from '../data/mockData'
 import useAppStore from '../store/useAppStore'
 import { canUseMockFallback } from '../utils/runtimeMode'
-import { createAgendaEvent, deleteAgendaEvent, getAgendaByTrip, subscribeAgendaByTrip, updateAgendaEvent } from '../services/agendaService'
+import { createAgendaEvent, deleteAgendaEvent, getAgendaByTrip, settleAgendaExpense, subscribeAgendaByTrip, updateAgendaEvent } from '../services/agendaService'
 
 function mapMockAgenda(item) {
   return {
@@ -73,6 +73,12 @@ function useAgenda() {
   async function remove(id) {
     await deleteAgendaEvent(id)
   }
+  const updateExpense = useCallback(async (id, actualCost, options = {}) => {
+    await settleAgendaExpense(id, actualCost, {
+      ...options,
+      createdBy: userProfile?.uid,
+    })
+  }, [userProfile?.uid])
 
   return {
     agenda: usingMockData ? mockData.agenda.map(mapMockAgenda) : agenda,
@@ -81,6 +87,7 @@ function useAgenda() {
     usingMockData,
     create,
     update,
+    updateExpense,
     delete: remove,
     refresh,
   }

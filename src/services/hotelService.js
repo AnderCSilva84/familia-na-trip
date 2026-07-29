@@ -14,7 +14,7 @@ import {
 import { db, ensureFirebaseConfigured } from '../firebase/config'
 import { resolveMapMetadata } from '../utils/locationPresets'
 import { createAgendaEvent } from './agendaService'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 import { geocodeLocation } from './geocodeService'
 
@@ -107,6 +107,9 @@ export async function createHotelReservation(data) {
         date: payload.checkIn,
         startTime: '14:00',
         location: payload.address,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        mapQuery: payload.mapQuery,
         image: payload.image,
         link: payload.link,
         type: 'hotel',
@@ -120,6 +123,9 @@ export async function createHotelReservation(data) {
         date: payload.checkOut,
         startTime: '12:00',
         location: payload.address,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        mapQuery: payload.mapQuery,
         image: payload.image,
         link: payload.link,
         type: 'hotel',
@@ -130,7 +136,7 @@ export async function createHotelReservation(data) {
   }
 
   if (payload.status === 'reservado' || payload.status === 'pago') {
-    await createNotification({
+    queueNotification({
       tripId: payload.tripId,
       title: 'Hospedagem atualizada',
       message: `${payload.hotelName} está ${payload.status}.`,

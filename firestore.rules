@@ -205,6 +205,12 @@ service cloud.firestore {
       allow update, delete: if canManageContent();
     }
 
+    match /travelDistances/{distanceId} {
+      allow read: if canReadTripData();
+      allow create: if canCreateContent();
+      allow update, delete: if canManageContent();
+    }
+
     match /hotelReservations/{hotelId} {
       allow read: if canReadTripData();
       allow create: if canCreateContent();

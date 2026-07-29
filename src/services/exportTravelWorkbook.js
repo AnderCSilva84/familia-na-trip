@@ -2,7 +2,7 @@ import { formatCurrency } from '../utils/formatters'
 
 function buildSummaryRows(trip, expenseSummary, membersCount, agendaCount) {
   const totalBudget = Number(trip?.totalBudget ?? 0)
-  const remainingBudget = totalBudget - Number(expenseSummary?.totalActual ?? 0)
+  const remainingBudget = totalBudget - Number(expenseSummary?.totalTravelCardActual ?? 0)
 
   return [
     { campo: 'Viagem', valor: trip?.name ?? 'Familia na Trip' },
@@ -11,7 +11,8 @@ function buildSummaryRows(trip, expenseSummary, membersCount, agendaCount) {
     { campo: 'Orcamento total', valor: totalBudget },
     { campo: 'Gasto estimado', valor: Number(expenseSummary?.totalEstimated ?? 0) },
     { campo: 'Gasto efetivado', valor: Number(expenseSummary?.totalActual ?? 0) },
-    { campo: 'Saldo restante', valor: remainingBudget },
+    { campo: 'Gasto no Cartao viagem', valor: Number(expenseSummary?.totalTravelCardActual ?? 0) },
+    { campo: 'Saldo do Cartao viagem', valor: remainingBudget },
     { campo: 'Membros conectados', valor: membersCount },
     { campo: 'Eventos na agenda', valor: agendaCount },
   ]
@@ -77,7 +78,7 @@ export async function exportTravelWorkbook({ trip, agenda, expenses, members, su
   return {
     fileName: `${safeTripName || 'familia-na-trip'}-backup.xlsx`,
     summaryText: `Resumo exportado com saldo de ${formatCurrency(
-      Number(trip?.totalBudget ?? 0) - Number(summary?.totalActual ?? 0),
+      Number(trip?.totalBudget ?? 0) - Number(summary?.totalTravelCardActual ?? 0),
     )}.`,
   }
 }

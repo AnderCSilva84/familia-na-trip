@@ -30,6 +30,7 @@ function ItineraryPage() {
     filter === 'all' ? items : items.filter((item) => item.status === filter)
 
   async function handleDelete(itemId) {
+    if (!window.confirm('Tem certeza que deseja excluir este item do roteiro?')) return
     try {
       await deleteItem(itemId)
       setFeedback('Item do roteiro removido com sucesso.')

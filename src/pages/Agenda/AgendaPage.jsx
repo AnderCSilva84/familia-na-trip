@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { FiBell, FiCalendar, FiExternalLink, FiFileText, FiMap, FiNavigation, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { FiBell, FiCalendar, FiDollarSign, FiExternalLink, FiFileText, FiMap, FiNavigation, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -11,9 +11,12 @@ import StatusMessage from '../../components/feedback/StatusMessage'
 import useAgenda from '../../hooks/useAgenda'
 import useAgendaReviews from '../../hooks/useAgendaReviews'
 import useAuth from '../../hooks/useAuth'
+import useMembers from '../../hooks/useMembers'
 import { getCatRatingMeta } from '../../utils/catRating'
 import { buildMonthGrid, formatCurrency, formatDateInput, formatDisplayDate, normalizeDisplayTime } from '../../utils/formatters'
 import { buildGoogleMapsUrl, buildWazeUrl } from '../../utils/navigationLinks'
+import { canEditAnyContent } from '../../utils/permissions'
+import { syncAgendaDistanceSuggestions } from '../../services/distanceService'
 
 const days = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 const typeLabels = {
@@ -24,6 +27,13 @@ const typeLabels = {
   veiculo: 'Veiculo',
   alarme: 'Alarme',
   outro: 'Outro',
+}
+
+const travelModeLabels = {
+  walking: '🚶 A pé',
+  transit: '🚇 Metrô / transporte público',
+  car: '🚗 Carro',
+  plane: '✈️ Avião',
 }
 
 function getTodayString() {
@@ -48,11 +58,24 @@ function formatMonthTitle(selectedDate) {
   }).format(selected)
 }
 
+function getEventEndTimestamp(item) {
+  const date = formatDateInput(item.date)
+  const time = normalizeDisplayTime(item.endTime || item.startTime)
+
+  if (!date || !time) {
+    return null
+  }
+
+  const timestamp = new Date(`${date}T${time.slice(0, 5)}:00`).getTime()
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
 function AgendaPage() {
   const navigate = useNavigate()
-  const { trip } = useAuth()
-  const { agenda, loading, error, usingMockData, delete: remove } = useAgenda()
+  const { trip, userProfile } = useAuth()
+  const { agenda, loading, error, usingMockData, delete: remove, updateExpense } = useAgenda()
   const { saveReview } = useAgendaReviews()
+  const { members } = useMembers()
   const [selectedDate, setSelectedDate] = useState(getTodayString)
   const [typeFilter, setTypeFilter] = useState('todos')
   const [feedback, setFeedback] = useState('')
@@ -61,6 +84,14 @@ function AgendaPage() {
   const [rating, setRating] = useState(0)
   const [reviewNote, setReviewNote] = useState('')
   const [reviewSaving, setReviewSaving] = useState(false)
+  const [expenseEvent, setExpenseEvent] = useState(null)
+  const [actualCost, setActualCost] = useState('')
+  const [expensePaidBy, setExpensePaidBy] = useState('Cartão viagem')
+  const [noExpense, setNoExpense] = useState(false)
+  const [expenseSaving, setExpenseSaving] = useState(false)
+  const automaticSettlements = useRef(new Set())
+  const lastDistanceSyncSignature = useRef(null)
+  const canManageAgendaValues = canEditAnyContent(userProfile)
   const monthDays = useMemo(() => buildMonthGrid(selectedDate), [selectedDate])
   const selectedDateLabel = useMemo(() => formatDisplayDate(selectedDate), [selectedDate])
   const availableTypeLabels = useMemo(() => ({
@@ -79,6 +110,89 @@ function AgendaPage() {
     [agenda, search, selectedDate, typeFilter],
   )
 
+  useEffect(() => {
+    if (loading || usingMockData || !canManageAgendaValues) {
+      return undefined
+    }
+
+    const settleDueEvents = async () => {
+      const now = Date.now()
+      const dueEvents = agenda.filter((item) => {
+        const endTimestamp = getEventEndTimestamp(item)
+        return (
+          endTimestamp !== null &&
+          endTimestamp <= now &&
+          Number(item.estimatedCost ?? 0) > 0 &&
+          Number(item.actualCost ?? 0) <= 0 &&
+          item.noExpense !== true &&
+          !automaticSettlements.current.has(item.id)
+        )
+      })
+
+      let failedCount = 0
+
+      for (const item of dueEvents) {
+        automaticSettlements.current.add(item.id)
+        try {
+          await updateExpense(item.id, null, { automatic: true })
+        } catch {
+          failedCount += 1
+        }
+      }
+
+      if (failedCount > 0) {
+        setFeedback(`Nao foi possivel dar baixa automatica em ${failedCount} evento(s).`)
+      }
+    }
+
+    settleDueEvents()
+    const timerId = window.setInterval(settleDueEvents, 60 * 1000)
+    return () => window.clearInterval(timerId)
+  }, [agenda, canManageAgendaValues, loading, updateExpense, usingMockData])
+
+  useEffect(() => {
+    if (loading || usingMockData || !canManageAgendaValues || !trip?.id) {
+      return
+    }
+
+    const signature = agenda
+      .map((item) => `${item.id}:${item.updatedAt?.seconds ?? ''}`)
+      .join('|')
+
+    if (signature === lastDistanceSyncSignature.current) {
+      return
+    }
+
+    lastDistanceSyncSignature.current = signature
+    syncAgendaDistanceSuggestions({
+      tripId: trip.id,
+      createdBy: userProfile.uid,
+      agenda,
+    }).catch(() => null)
+  }, [agenda, canManageAgendaValues, loading, trip?.id, userProfile?.uid, usingMockData])
+
+  async function handleUpdateExpense() {
+    if (!expenseEvent || (!noExpense && Number(actualCost) <= 0)) {
+      return
+    }
+
+    setExpenseSaving(true)
+    try {
+      await updateExpense(expenseEvent.id, noExpense ? 0 : actualCost, {
+        noExpense,
+        paidBy: expensePaidBy || 'Cartão viagem',
+      })
+      setFeedback(noExpense
+        ? 'Evento atualizado como sem gastos.'
+        : `Gasto atualizado e baixado em ${expensePaidBy || 'Cartão viagem'}.`)
+      setExpenseEvent(null)
+    } catch (saveError) {
+      setFeedback(saveError.message ?? 'Nao foi possivel atualizar o gasto.')
+    } finally {
+      setExpenseSaving(false)
+    }
+  }
+
   async function handleSaveReview() {
     if (!reviewEvent || rating < 1) return
     setReviewSaving(true)
@@ -94,6 +208,7 @@ function AgendaPage() {
   }
 
   async function handleDelete(id) {
+    if (!window.confirm('Tem certeza que deseja excluir este evento e seus dados vinculados?')) return
     try {
       await remove(id)
       setFeedback('Evento removido com sucesso.')
@@ -123,6 +238,11 @@ function AgendaPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
                 Origem: {availableTypeLabels[item.type] ?? item.type ?? 'Evento'}
               </p>
+              {travelModeLabels[item.travelMode] ? (
+                <p className="font-medium text-sky-700">
+                  Deslocamento: {travelModeLabels[item.travelMode]}
+                </p>
+              ) : null}
               <p>
                 {item.weekday || '--'} - {formatDisplayDate(item.date)}
               </p>
@@ -140,9 +260,16 @@ function AgendaPage() {
               ) : null}
             </div>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {availableTypeLabels[item.type] ?? item.type ?? 'evento'}
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            {(Number(item.actualCost ?? 0) > 0 || item.noExpense === true) ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Finalizado
+              </span>
+            ) : null}
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              {availableTypeLabels[item.type] ?? item.type ?? 'evento'}
+            </span>
+          </div>
         </div>
         {item.instructions ? (
           <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -180,6 +307,20 @@ function AgendaPage() {
             <p className="mt-1 text-lg font-semibold text-teal-700">{formatCurrency(item.actualCost ?? 0)}</p>
           </div>
         </div>
+        {canManageAgendaValues ? (
+          <Button
+            className="w-full"
+            icon={<FiDollarSign size={16} />}
+            onClick={() => {
+              setExpenseEvent(item)
+              setActualCost(item.actualCost > 0 ? String(item.actualCost) : '')
+              setExpensePaidBy('Cartão viagem')
+              setNoExpense(item.noExpense === true)
+            }}
+          >
+            Atualizar gasto
+          </Button>
+        ) : null}
         <div className={`grid gap-3 ${item.link || item.walletDocumentUrl ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'}`}>
           <Button
             as={googleMapsUrl ? 'a' : 'button'}
@@ -357,6 +498,67 @@ function AgendaPage() {
         </Card>
       ) : null}
       {!loading && !error ? selectedItems.map(renderAgendaItem) : null}
+
+      {expenseEvent ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/35 p-4 backdrop-blur-sm lg:items-center">
+          <button className="absolute inset-0" onClick={() => setExpenseEvent(null)} aria-label="Fechar atualizacao de gasto" />
+          <Card className="relative z-10 w-full max-w-md space-y-5 rounded-[32px]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Atualizar gasto</p>
+                <h3 className="mt-2 text-xl font-semibold">{expenseEvent.title}</h3>
+                <p className="text-sm text-slate-500">
+                  Estimado: {formatCurrency(expenseEvent.estimatedCost ?? 0)}
+                </p>
+              </div>
+              <button onClick={() => setExpenseEvent(null)} className="rounded-full bg-slate-100 p-3"><FiX /></button>
+            </div>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+              <span>Gasto real</span>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={actualCost}
+                onChange={(event) => setActualCost(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                autoFocus
+                disabled={noExpense}
+              />
+            </label>
+            <label className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={noExpense}
+                onChange={(event) => setNoExpense(event.target.checked)}
+              />
+              Sem gastos
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+              <span>Pago por</span>
+              <select
+                value={expensePaidBy}
+                onChange={(event) => setExpensePaidBy(event.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+                disabled={noExpense}
+              >
+                <option value="Cartão viagem">Cartão viagem</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.name}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="text-sm text-slate-500">
+              Se nenhum outro pagador for escolhido, a baixa será registrada em “Cartão viagem”.
+            </p>
+            <Button className="w-full" onClick={handleUpdateExpense} disabled={expenseSaving || (!noExpense && Number(actualCost) <= 0)}>
+              {expenseSaving ? 'Atualizando...' : noExpense ? 'Confirmar sem gastos' : 'Atualizar e dar baixa'}
+            </Button>
+          </Card>
+        </div>
+      ) : null}
 
       {reviewEvent ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/35 p-4 backdrop-blur-sm lg:items-center">

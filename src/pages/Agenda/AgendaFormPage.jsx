@@ -25,32 +25,19 @@ const types = [
   { value: 'outro', label: 'Outro' },
 ]
 
+const travelModes = [
+  { value: '', label: 'Não contabilizar deslocamento' },
+  { value: 'walking', label: 'A pé' },
+  { value: 'transit', label: 'Metrô / transporte público' },
+  { value: 'car', label: 'Carro' },
+  { value: 'plane', label: 'Avião' },
+]
+
 function getWeekday(date) {
   if (!date) return ''
   const parsedDate = new Date(`${date}T12:00:00`)
   if (Number.isNaN(parsedDate.getTime())) return ''
   return new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(parsedDate)
-}
-
-function formatBrazilianDate(value) {
-  const [year, month, day] = String(value ?? '').split('-')
-  return year && month && day ? `${day}/${month}/${year}` : ''
-}
-
-function parseBrazilianDate(value) {
-  const match = String(value ?? '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-  if (!match) return ''
-  const [, day, month, year] = match
-  const isoDate = `${year}-${month}-${day}`
-  const parsed = new Date(`${isoDate}T12:00:00`)
-  return !Number.isNaN(parsed.getTime())
-    && parsed.getDate() === Number(day)
-    && parsed.getMonth() + 1 === Number(month) ? isoDate : ''
-}
-
-function maskDate(value) {
-  const digits = value.replace(/\D/g, '').slice(0, 8)
-  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/')
 }
 
 function normalizeTime24(value) {
@@ -73,8 +60,7 @@ function AgendaFormContent({
   const { documents, loading: walletLoading, error: walletError } = useWallet()
   const initialEvent = editingEvent ?? null
   const initialDate = formatDateInput(initialEvent?.date)
-  const [dateText, setDateText] = useState(formatBrazilianDate(initialDate))
-  const date = parseBrazilianDate(dateText)
+  const [date, setDate] = useState(initialDate)
   const [selectedType, setSelectedType] = useState(initialEvent?.type ?? 'evento')
   const [customTypeName, setCustomTypeName] = useState('')
   const [savingType, setSavingType] = useState(false)
@@ -116,7 +102,7 @@ function AgendaFormContent({
     setFeedback('')
 
     try {
-      if (!date) throw new Error('Informe uma data válida no formato DD/MM/AAAA.')
+      if (!date) throw new Error('Selecione uma data válida no calendário.')
       const formData = new FormData(event.currentTarget)
       const startTime = normalizeTime24(formData.get('startTime'))
       const endTime = normalizeTime24(formData.get('endTime'))
@@ -143,6 +129,9 @@ function AgendaFormContent({
           : Number(initialEvent?.actualCost ?? 0),
         latitude: String(formData.get('latitude') ?? '').trim(),
         longitude: String(formData.get('longitude') ?? '').trim(),
+        travelMode: String(formData.get('travelMode') ?? ''),
+        routeOrigin: String(formData.get('routeOrigin') ?? '').trim(),
+        routeDestination: String(formData.get('routeDestination') ?? '').trim(),
         location: [formData.get('city'), formData.get('local')].filter(Boolean).join(' - '),
         expenseCategory: initialEvent?.expenseCategory ?? 'Outros',
         type: selectedType,
@@ -216,16 +205,7 @@ function AgendaFormContent({
           <Input name="title" label="Título" defaultValue={initialEvent?.title ?? ''} required />
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input
-              name="dateDisplay"
-              label="Data (DD/MM/AAAA)"
-              value={dateText}
-              onChange={(event) => setDateText(maskDate(event.target.value))}
-              inputMode="numeric"
-              placeholder="DD/MM/AAAA"
-              maxLength="10"
-              required
-            />
+            <Input name="date" label="Data" type="date" lang="pt-BR" value={date} onChange={(event) => setDate(event.target.value)} required />
             <Input name="weekday" label="Dia da semana" value={weekday} readOnly placeholder="Preenchido pela data" />
           </div>
 
@@ -261,9 +241,41 @@ function AgendaFormContent({
           <div>
             <p className="mb-2 text-sm font-medium text-slate-600">Horário do evento</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input name="startTime" label="Hora de início (24h)" defaultValue={String(initialEvent?.startTime ?? '').slice(0, 5)} inputMode="numeric" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxLength="5" />
-              <Input name="endTime" label="Hora de término (24h)" defaultValue={String(initialEvent?.endTime ?? '').slice(0, 5)} inputMode="numeric" placeholder="HH:MM" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxLength="5" />
+              <Input name="startTime" label="Hora de início (24h)" type="time" lang="pt-BR" step="60" defaultValue={String(initialEvent?.startTime ?? '').slice(0, 5)} />
+              <Input name="endTime" label="Hora de término (24h)" type="time" lang="pt-BR" step="60" defaultValue={String(initialEvent?.endTime ?? '').slice(0, 5)} />
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-teal-100 bg-teal-50/60 p-4">
+            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+              <span>Deslocamento até este evento</span>
+              <select
+                name="travelMode"
+                defaultValue={initialEvent?.travelMode ?? ''}
+                className="w-full rounded-2xl border border-teal-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
+              >
+                {travelModes.map((mode) => (
+                  <option key={mode.value || 'none'} value={mode.value}>{mode.label}</option>
+                ))}
+              </select>
+            </label>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Input
+                name="routeOrigin"
+                label="Saindo de (opcional)"
+                defaultValue={initialEvent?.routeOrigin ?? ''}
+                placeholder="Automático: evento anterior"
+              />
+              <Input
+                name="routeDestination"
+                label="Indo para (opcional)"
+                defaultValue={initialEvent?.routeDestination ?? ''}
+                placeholder="Automático: local deste evento"
+              />
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              Indique como a família irá do evento anterior até este local. A quilometragem será recalculada automaticamente.
+            </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

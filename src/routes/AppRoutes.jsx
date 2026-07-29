@@ -47,6 +47,7 @@ const TripsPage = lazy(() => import('../pages/Trips/TripsPage'))
 const TripFormPage = lazy(() => import('../pages/Trips/TripFormPage'))
 const GalleryPage = lazy(() => import('../pages/Gallery/GalleryPage'))
 const TravelHistoryMapPage = lazy(() => import('../pages/Map/TravelHistoryMapPage'))
+const DistancesPage = lazy(() => import('../pages/Distances/DistancesPage'))
 
 function renderPage(Component) {
   return (
@@ -70,6 +71,7 @@ function AppRoutes() {
             <Route path="/gallery" element={renderPage(GalleryPage)} />
             <Route path="/map" element={renderPage(MapPage)} />
             <Route path="/travel-history" element={renderPage(TravelHistoryMapPage)} />
+            <Route path="/distances" element={renderPage(DistancesPage)} />
             <Route path="/members" element={renderPage(MembersPage)} />
             <Route path="/polls" element={renderPage(PollsPage)} />
             <Route path="/polls/new" element={renderPage(PollFormPage)} />

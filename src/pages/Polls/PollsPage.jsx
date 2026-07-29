@@ -25,6 +25,11 @@ function PollsPage() {
     }
   }
 
+  function handleDelete(pollId) {
+    if (!window.confirm('Tem certeza que deseja excluir esta enquete?')) return
+    handleAction(() => remove(pollId))
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -54,7 +59,7 @@ function PollsPage() {
                 onVote={(optionId) => handleAction(() => vote(poll.id, optionId))}
                 onClose={canManage ? () => handleAction(() => close(poll.id)) : undefined}
                 onReopen={canManage ? () => handleAction(() => reopen(poll.id)) : undefined}
-                onDelete={canDelete ? () => handleAction(() => remove(poll.id)) : undefined}
+                onDelete={canDelete ? () => handleDelete(poll.id) : undefined}
               />
             )
           })

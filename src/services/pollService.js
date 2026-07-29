@@ -10,7 +10,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 
 function pollsCollection() {
@@ -49,7 +49,7 @@ export async function createPoll(data) {
   }
 
   await setDoc(pollRef, payload)
-  await createNotification({
+  queueNotification({
     tripId: payload.tripId,
     title: 'Nova enquete disponivel',
     message: payload.question,

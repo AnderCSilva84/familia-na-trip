@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 
 function expensesCollection() {
@@ -24,6 +24,11 @@ function isSettledInApp(expense) {
     expense.type === 'efetivado' &&
     (Boolean(String(expense.relatedAgendaId ?? '').trim()) || expense.settled === true)
   )
+}
+
+function isTravelCardPayment(expense) {
+  return String(expense.paidBy ?? '').trim().toLocaleLowerCase('pt-BR')
+    === 'cartão viagem'.toLocaleLowerCase('pt-BR')
 }
 
 function mapExpense(id, data) {
@@ -71,7 +76,7 @@ export async function createExpense(data) {
   }
 
   await setDoc(expenseRef, payload)
-  await createNotification({
+  queueNotification({
     tripId: payload.tripId,
     title: 'Novo gasto registrado',
     message: payload.description,
@@ -165,7 +170,7 @@ export async function importExpensesBatch({ tripId, createdBy, expenses, replace
 
   await batch.commit()
 
-  await createNotification({
+  queueNotification({
     tripId,
     title: 'Planilha de gastos importada',
     message: `${expenses.length} lancamento(s) sincronizado(s) com o aplicativo.`,
@@ -187,6 +192,9 @@ export function calculateExpenseSummary(expenses) {
         accumulator.totalEstimated += value
       } else if (isSettledInApp(expense)) {
         accumulator.totalActual += value
+        if (isTravelCardPayment(expense)) {
+          accumulator.totalTravelCardActual += value
+        }
         accumulator.byCategory[expense.category] =
           (accumulator.byCategory[expense.category] ?? 0) + value
         accumulator.byMember[expense.paidBy || 'Sem responsavel'] =
@@ -198,6 +206,7 @@ export function calculateExpenseSummary(expenses) {
     {
       totalEstimated: 0,
       totalActual: 0,
+      totalTravelCardActual: 0,
       byCategory: {},
       byMember: {},
     },
@@ -206,6 +215,7 @@ export function calculateExpenseSummary(expenses) {
   return {
     totalEstimated: totals.totalEstimated,
     totalActual: totals.totalActual,
+    totalTravelCardActual: totals.totalTravelCardActual,
     difference: totals.totalEstimated - totals.totalActual,
     byCategory: Object.entries(totals.byCategory).map(([name, value]) => ({ name, value })),
     byMember: Object.entries(totals.byMember).map(([name, value]) => ({ name, value })),
@@ -222,20 +232,27 @@ export async function syncAgendaActualExpense({
   actualCost,
   date,
   createdBy,
+  paidBy,
+  existingExpenseId = '',
 }) {
   if (!tripId || !agendaId) {
     return ''
   }
 
   const normalizedValue = Number(actualCost ?? 0)
-  const existingSnapshot = await getDocs(
-    query(expensesCollection(), where('relatedAgendaId', '==', agendaId), where('type', '==', 'efetivado')),
-  )
-  const existingDoc = existingSnapshot.docs[0]
+  const existingSnapshot = existingExpenseId
+    ? null
+    : await getDocs(
+      query(expensesCollection(), where('relatedAgendaId', '==', agendaId), where('type', '==', 'efetivado')),
+    )
+  const existingDoc = existingSnapshot?.docs[0]
+  const existingRef = existingExpenseId
+    ? doc(expensesCollection(), existingExpenseId)
+    : existingDoc?.ref
 
   if (!normalizedValue) {
-    if (existingDoc) {
-      await deleteDoc(existingDoc.ref)
+    if (existingRef) {
+      await deleteDoc(existingRef)
     }
 
     return ''
@@ -250,16 +267,23 @@ export async function syncAgendaActualExpense({
     value: normalizedValue,
     settled: true,
     settledAt: serverTimestamp(),
-    paidBy: '',
     dividedBetween: [],
     date: date ?? '',
     createdBy,
     updatedAt: serverTimestamp(),
   }
 
-  if (existingDoc) {
-    await updateDoc(existingDoc.ref, expensePayload)
-    return existingDoc.id
+  if (paidBy !== undefined) {
+    expensePayload.paidBy = paidBy
+  } else if (existingDoc) {
+    expensePayload.paidBy = existingDoc.data().paidBy ?? 'Cartão viagem'
+  } else if (!existingRef) {
+    expensePayload.paidBy = 'Cartão viagem'
+  }
+
+  if (existingRef) {
+    await updateDoc(existingRef, expensePayload)
+    return existingExpenseId || existingDoc.id
   }
 
   const expenseRef = doc(expensesCollection())
@@ -272,8 +296,35 @@ export async function syncAgendaActualExpense({
   return expenseRef.id
 }
 
-export async function deleteAgendaActualExpense(agendaId) {
+export async function migrateSettledExpensesToTravelCard(tripId) {
+  if (!tripId) {
+    return 0
+  }
+
+  const snapshot = await getDocs(query(expensesCollection(), where('tripId', '==', tripId)))
+  const settledDocs = snapshot.docs.filter((expenseDoc) => expenseDoc.data().type === 'efetivado')
+
+  for (let index = 0; index < settledDocs.length; index += 400) {
+    const batch = writeBatch(db)
+    settledDocs.slice(index, index + 400).forEach((expenseDoc) => {
+      batch.update(expenseDoc.ref, {
+        paidBy: 'Cartão viagem',
+        updatedAt: serverTimestamp(),
+      })
+    })
+    await batch.commit()
+  }
+
+  return settledDocs.length
+}
+
+export async function deleteAgendaActualExpense(agendaId, existingExpenseId = '') {
   if (!agendaId) {
+    return
+  }
+
+  if (existingExpenseId) {
+    await deleteDoc(doc(expensesCollection(), existingExpenseId))
     return
   }
 

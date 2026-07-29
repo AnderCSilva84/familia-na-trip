@@ -10,7 +10,7 @@ import {
   where,
 } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 
 function alarmsCollection() {
@@ -57,7 +57,7 @@ export async function createAlarm(data) {
   }
 
   await setDoc(alarmRef, payload)
-  await createNotification({
+  queueNotification({
     tripId: payload.tripId,
     title: 'Novo alarme criado',
     message: `${payload.title} as ${payload.time}`,

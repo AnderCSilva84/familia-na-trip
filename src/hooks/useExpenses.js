@@ -8,6 +8,7 @@ import {
   deleteExpense as deleteExpenseService,
   getExpensesByTrip,
   importExpensesBatch,
+  migrateSettledExpensesToTravelCard,
   subscribeExpensesByTrip,
   updateExpense as updateExpenseService,
 } from '../services/expenseService'
@@ -16,6 +17,7 @@ function fallbackSummary() {
   return {
     totalEstimated: mockData.expenses.estimated,
     totalActual: mockData.expenses.actual,
+    totalTravelCardActual: 0,
     difference: mockData.expenses.estimated - mockData.expenses.actual,
     byCategory: mockData.expenses.categories,
     byMember: mockData.expenses.byMember,
@@ -95,6 +97,10 @@ function useExpenses() {
     })
   }
 
+  async function migratePaymentsToTravelCard() {
+    return migrateSettledExpensesToTravelCard(trip.id)
+  }
+
   return {
     expenses: usingMockData ? [] : expenses,
     summary: usingMockData ? fallbackSummary() : summary,
@@ -105,6 +111,7 @@ function useExpenses() {
     updateExpense,
     deleteExpense,
     importExpenses,
+    migratePaymentsToTravelCard,
     refreshExpenses,
   }
 }

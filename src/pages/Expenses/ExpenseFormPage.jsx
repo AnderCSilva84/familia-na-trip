@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
@@ -7,11 +7,12 @@ import Input from '../../components/common/Input'
 import Loading from '../../components/common/Loading'
 import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
+import useAuth from '../../hooks/useAuth'
 import useExpenses from '../../hooks/useExpenses'
 import useMembers from '../../hooks/useMembers'
 import { formatDateInput } from '../../utils/formatters'
 
-const categories = [
+const defaultCategories = [
   'Hospedagem',
   'Transporte',
   'Alimentacao',
@@ -21,10 +22,19 @@ const categories = [
   'Outros',
 ]
 
+function normalizeCategory(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
 function ExpenseFormPage() {
   const navigate = useNavigate()
   const { expenseId } = useParams()
   const { expenses, loading, error, createExpense, updateExpense, usingMockData } = useExpenses()
+  const { trip } = useAuth()
   const { members } = useMembers()
   const editingExpense = expenses.find((expense) => expense.id === expenseId)
   const [selectedMembers, setSelectedMembers] = useState(null)
@@ -33,6 +43,18 @@ function ExpenseFormPage() {
   const [submitting, setSubmitting] = useState(false)
   const selectedType = selectedTypeOverride ?? editingExpense?.type ?? 'efetivado'
   const dividedBetween = selectedMembers ?? editingExpense?.dividedBetween ?? []
+  const categories = useMemo(() => {
+    const customCategories = (trip?.agendaTypes ?? [])
+      .map((type) => String(type.label ?? '').trim())
+      .filter(Boolean)
+    const editingCategory = String(editingExpense?.category ?? '').trim()
+
+    return [...defaultCategories, ...customCategories, editingCategory]
+      .filter(Boolean)
+      .filter((category, index, list) => list.findIndex(
+        (item) => normalizeCategory(item) === normalizeCategory(category),
+      ) === index)
+  }, [editingExpense?.category, trip?.agendaTypes])
 
   function toggleMember(memberName) {
     setSelectedMembers((current) => {
@@ -177,10 +199,11 @@ function ExpenseFormPage() {
             <span>Pago por</span>
             <select
               name="paidBy"
-              defaultValue={editingExpense?.paidBy ?? ''}
+              defaultValue={editingExpense ? (editingExpense.paidBy || 'Cartão viagem') : 'Cartão viagem'}
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-teal-500 focus:ring-4 focus:ring-teal-100"
             >
               <option value="">Selecione um membro</option>
+              <option value="Cartão viagem">Cartão viagem</option>
               {members.map((member) => (
                 <option key={member.id} value={member.name}>
                   {member.name}

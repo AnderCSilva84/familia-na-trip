@@ -37,6 +37,12 @@ export default function SouvenirsPage() {
     }
   }
 
+  function handleDelete(itemId) {
+    if (window.confirm('Tem certeza que deseja excluir esta lembrança?')) {
+      deleteItem(itemId)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <Card className="bg-[linear-gradient(135deg,#fff7ed,#fff)]">
@@ -77,7 +83,7 @@ export default function SouvenirsPage() {
                 <p className="text-sm text-slate-500">Para: {item.recipient}</p>
                 <p className={`mt-1 text-xs font-semibold ${item.done ? 'text-teal-700' : 'text-amber-700'}`}>{item.done ? 'Entregue' : 'Pendente de entrega'}</p>
               </div>
-              {canDelete ? <button type="button" onClick={() => deleteItem(item.id)} className="p-2 text-rose-500" aria-label="Excluir lembranca"><FiTrash2 /></button> : null}
+              {canDelete ? <button type="button" onClick={() => handleDelete(item.id)} className="p-2 text-rose-500" aria-label="Excluir lembranca"><FiTrash2 /></button> : null}
             </Card>
           )
         })}

@@ -17,7 +17,7 @@ import { compareEventChronology, getDefaultEventImage } from '../utils/eventDefa
 import { normalizeDisplayTime } from '../utils/formatters'
 import { resolveMapMetadata } from '../utils/locationPresets'
 import { deleteAlarmByAgendaEventId, syncAlarmFromAgendaEvent } from './alarmService'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 import { deleteAgendaActualExpense, syncAgendaActualExpense } from './expenseService'
 import { geocodeLocation } from './geocodeService'
@@ -89,6 +89,37 @@ async function enrichAgendaLocationData(item) {
   }
 }
 
+function getImmediateLocationData(item = {}, fallback = {}) {
+  const mapMetadata = resolveMapMetadata(item)
+  const latitude = Number(item.latitude)
+  const longitude = Number(item.longitude)
+  const hasCoordinates = String(item.latitude ?? '').trim() !== ''
+    && String(item.longitude ?? '').trim() !== ''
+    && Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+
+  return {
+    mapX: item.mapX ?? fallback.mapX ?? mapMetadata.mapX,
+    mapY: item.mapY ?? fallback.mapY ?? mapMetadata.mapY,
+    mapQuery: item.mapQuery || fallback.mapQuery || mapMetadata.mapQuery,
+    latitude: hasCoordinates ? latitude : fallback.latitude ?? '',
+    longitude: hasCoordinates ? longitude : fallback.longitude ?? '',
+  }
+}
+
+function enrichAgendaLocationInBackground(eventRef, item) {
+  enrichAgendaLocationData(item)
+    .then((locationData) => updateDoc(eventRef, {
+      mapX: locationData.mapX,
+      mapY: locationData.mapY,
+      mapQuery: locationData.mapQuery,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      updatedAt: serverTimestamp(),
+    }))
+    .catch(() => null)
+}
+
 function mapAgendaItem(id, data) {
   const mapMetadata = resolveMapMetadata(data)
 
@@ -108,6 +139,7 @@ function mapAgendaItem(id, data) {
     endTime: data.endTime ?? '',
     estimatedCost: Number(data.estimatedCost ?? 0),
     actualCost: Number(data.actualCost ?? 0),
+    noExpense: data.noExpense === true,
     catRating: Number(data.catRating ?? 0),
     expenseCategory: data.expenseCategory ?? 'Outros',
     location: data.location ?? '',
@@ -127,6 +159,9 @@ function mapAgendaItem(id, data) {
     mapQuery: data.mapQuery ?? mapMetadata.mapQuery,
     latitude: Number(data.latitude ?? '') || '',
     longitude: Number(data.longitude ?? '') || '',
+    travelMode: data.travelMode,
+    routeOrigin: data.routeOrigin ?? '',
+    routeDestination: data.routeDestination ?? '',
     type: data.type ?? 'outro',
     notifyMembers: data.notifyMembers ?? false,
     membersToNotify: data.membersToNotify ?? [],
@@ -178,7 +213,7 @@ async function uploadAgendaEventImage(tripId, eventId, file) {
 export async function createAgendaEvent(data, imageFile = null) {
   const { createNotification: shouldNotify = true, ...eventData } = data
   const eventRef = doc(agendaCollection())
-  const locationData = await enrichAgendaLocationData(eventData)
+  const locationData = getImmediateLocationData(eventData)
   const payload = {
     id: eventRef.id,
     tripId: eventData.tripId,
@@ -214,6 +249,9 @@ export async function createAgendaEvent(data, imageFile = null) {
     mapQuery: locationData.mapQuery,
     latitude: locationData.latitude,
     longitude: locationData.longitude,
+    travelMode: eventData.travelMode ?? '',
+    routeOrigin: eventData.routeOrigin ?? '',
+    routeDestination: eventData.routeDestination ?? '',
     type: eventData.type ?? 'evento',
     notifyMembers: eventData.notifyMembers ?? false,
     membersToNotify: eventData.membersToNotify ?? [],
@@ -228,40 +266,43 @@ export async function createAgendaEvent(data, imageFile = null) {
   }
 
   await setDoc(eventRef, payload)
+  enrichAgendaLocationInBackground(eventRef, eventData)
+
+  const secondaryTasks = []
 
   if (imageFile) {
-    const uploadedImage = await uploadAgendaEventImage(eventData.tripId, eventRef.id, imageFile)
-
-    await updateDoc(eventRef, {
-      image: uploadedImage.image,
-      imagePath: uploadedImage.imagePath,
-      updatedAt: serverTimestamp(),
-    })
-
-    payload.image = uploadedImage.image
-    payload.imagePath = uploadedImage.imagePath
+    secondaryTasks.push((async () => {
+      const uploadedImage = await uploadAgendaEventImage(eventData.tripId, eventRef.id, imageFile)
+      await updateDoc(eventRef, {
+        image: uploadedImage.image,
+        imagePath: uploadedImage.imagePath,
+        updatedAt: serverTimestamp(),
+      })
+      payload.image = uploadedImage.image
+      payload.imagePath = uploadedImage.imagePath
+    })())
   }
 
   if (payload.type === 'alarme') {
-    const alarmId = await syncAlarmFromAgendaEvent({
-      ...payload,
-      id: eventRef.id,
-    })
-
-    await updateDoc(eventRef, {
-      alarmId,
-      updatedAt: serverTimestamp(),
-    })
-
-    payload.alarmId = alarmId
+    secondaryTasks.push((async () => {
+      const alarmId = await syncAlarmFromAgendaEvent({
+        ...payload,
+        id: eventRef.id,
+      })
+      await updateDoc(eventRef, {
+        alarmId,
+        updatedAt: serverTimestamp(),
+      })
+      payload.alarmId = alarmId
+    })())
   }
 
   if (payload.type === 'ponto_turistico') {
-    await syncAttractionFromAgenda({ ...payload, id: eventRef.id })
+    secondaryTasks.push(syncAttractionFromAgenda({ ...payload, id: eventRef.id }))
   }
 
   if (shouldNotify) {
-    await createNotification({
+    queueNotification({
       tripId: payload.tripId,
       title: 'Novo evento na agenda',
       message: payload.title,
@@ -273,7 +314,7 @@ export async function createAgendaEvent(data, imageFile = null) {
   }
 
   if (Number(payload.actualCost ?? 0) > 0) {
-    await syncAgendaActualExpense({
+    secondaryTasks.push(syncAgendaActualExpense({
       tripId: payload.tripId,
       agendaId: eventRef.id,
       title: payload.title,
@@ -283,8 +324,10 @@ export async function createAgendaEvent(data, imageFile = null) {
       actualCost: payload.actualCost,
       date: payload.date,
       createdBy: payload.createdBy,
-    })
+    }))
   }
+
+  await Promise.all(secondaryTasks)
 
   return { ...payload, createdAt: new Date(), updatedAt: new Date() }
 }
@@ -326,10 +369,12 @@ export async function updateAgendaEvent(id, data) {
   delete payload.imageFile
   delete payload.currentImagePath
 
-  const locationData = await enrichAgendaLocationData(payload)
+  const locationData = getImmediateLocationData(payload, currentData)
+  const uploadedImage = imageFile && data.tripId
+    ? await uploadAgendaEventImage(data.tripId, id, imageFile)
+    : null
 
-  if (imageFile && data.tripId) {
-    const uploadedImage = await uploadAgendaEventImage(data.tripId, id, imageFile)
+  if (uploadedImage) {
     payload.image = uploadedImage.image
     payload.imagePath = uploadedImage.imagePath
 
@@ -348,6 +393,7 @@ export async function updateAgendaEvent(id, data) {
     actualCost: payload.actualCost,
     date: payload.date,
     createdBy: payload.createdBy,
+    existingExpenseId: currentData.actualExpenseId ?? '',
   })
 
   let alarmId = currentData.alarmId ?? payload.alarmId ?? ''
@@ -374,12 +420,79 @@ export async function updateAgendaEvent(id, data) {
     actualExpenseId,
     updatedAt: serverTimestamp(),
   })
+  enrichAgendaLocationInBackground(eventRef, payload)
 
   if (payload.type === 'ponto_turistico') {
     await syncAttractionFromAgenda({ ...currentData, ...payload, id })
   } else if (currentData.type === 'ponto_turistico') {
     await deleteAttractionByAgendaId(id)
   }
+}
+
+export async function settleAgendaExpense(id, actualCost = null, {
+  automatic = false,
+  createdBy = '',
+  paidBy = 'Cartão viagem',
+  noExpense = false,
+} = {}) {
+  const eventRef = doc(agendaCollection(), id)
+  const currentSnapshot = await getDoc(eventRef)
+
+  if (!currentSnapshot.exists()) {
+    throw new Error('Evento nao encontrado.')
+  }
+
+  const currentData = currentSnapshot.data()
+
+  if (noExpense) {
+    await deleteAgendaActualExpense(id, currentData.actualExpenseId ?? '')
+    await updateDoc(eventRef, {
+      actualCost: 0,
+      actualExpenseId: '',
+      noExpense: true,
+      expenseSettledAutomatically: false,
+      expenseSettledAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    return ''
+  }
+
+  const normalizedValue = actualCost === null
+    ? Number(currentData.estimatedCost ?? 0)
+    : Number(actualCost)
+
+  if (!Number.isFinite(normalizedValue) || normalizedValue <= 0) {
+    throw new Error('Informe um gasto real maior que zero.')
+  }
+
+  if (automatic && Number(currentData.actualCost ?? 0) > 0) {
+    return currentData.actualExpenseId ?? ''
+  }
+
+  const actualExpenseId = await syncAgendaActualExpense({
+    tripId: currentData.tripId,
+    agendaId: id,
+    title: currentData.title,
+    city: currentData.city,
+    local: currentData.local,
+    category: currentData.expenseCategory,
+    actualCost: normalizedValue,
+    date: currentData.date,
+    createdBy: createdBy || currentData.createdBy,
+    paidBy,
+    existingExpenseId: currentData.actualExpenseId ?? '',
+  })
+
+  await updateDoc(eventRef, {
+    actualCost: normalizedValue,
+    actualExpenseId,
+    noExpense: false,
+    expenseSettledAutomatically: automatic,
+    expenseSettledAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })
+
+  return actualExpenseId
 }
 
 export async function deleteAgendaEvent(id) {
@@ -464,7 +577,7 @@ export async function importAgendaBatch({ tripId, createdBy, agendaItems, replac
   await batch.commit()
 
   if (enrichedItems.length > 0) {
-    await createNotification({
+    queueNotification({
       tripId,
       title: 'Agenda importada da planilha',
       message: `${enrichedItems.length} evento(s) atualizado(s) na viagem.`,

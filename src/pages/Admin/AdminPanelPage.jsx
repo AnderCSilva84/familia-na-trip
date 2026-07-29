@@ -142,9 +142,9 @@ function AdminPanelPage() {
                 <p className="mt-1 text-xl font-semibold text-slate-950">{formatCurrency(summary.totalActual)}</p>
               </div>
               <div className="rounded-3xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Saldo restante</p>
+                <p className="text-sm text-slate-500">Saldo do Cartão viagem</p>
                 <p className="mt-1 text-xl font-semibold text-slate-950">
-                  {formatCurrency(Number(trip?.totalBudget ?? 0) - Number(summary.totalActual ?? 0))}
+                  {formatCurrency(Number(trip?.totalBudget ?? 0) - Number(summary.totalTravelCardActual ?? 0))}
                 </p>
               </div>
             </div>

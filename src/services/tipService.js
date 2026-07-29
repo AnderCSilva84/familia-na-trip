@@ -11,7 +11,7 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
-import { createNotification } from './notificationService'
+import { queueNotification } from './notificationService'
 import { subscribeToQuery } from './firestoreRealtime'
 
 function tipsCollection() {
@@ -133,7 +133,7 @@ export async function importTipsBatch({ tripId, createdBy, tips, replaceExisting
   await batch.commit()
 
   if (tips.length) {
-    await createNotification({
+    queueNotification({
       tripId,
       title: 'Dicas importadas',
       message: `${tips.length} dica(s) sincronizada(s) da planilha oficial.`,

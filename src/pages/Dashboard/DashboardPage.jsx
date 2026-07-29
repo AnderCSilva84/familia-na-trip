@@ -14,6 +14,7 @@ import {
   FiMapPin,
   FiMap,
   FiSun,
+  FiShare2,
   FiX,
   FiUsers,
 } from 'react-icons/fi'
@@ -31,12 +32,14 @@ import useAgenda from '../../hooks/useAgenda'
 import useAgendaReviews from '../../hooks/useAgendaReviews'
 import useAuth from '../../hooks/useAuth'
 import useDiary from '../../hooks/useDiary'
+import useDistances from '../../hooks/useDistances'
 import useExpenses from '../../hooks/useExpenses'
 import useMembers from '../../hooks/useMembers'
 import { getDestinationWeather } from '../../services/weatherService'
 import { getCatRatingMeta } from '../../utils/catRating'
 import { compareEventChronology } from '../../utils/eventDefaults'
 import { canEditAnyContent, canManageMembers, canPromoteAdmins } from '../../utils/permissions'
+import { shareTravelCard } from '../../utils/travelShareCard'
 import {
   formatDateInput,
   formatCurrency,
@@ -112,13 +115,14 @@ function DashboardPage() {
   const { userProfile, currentUser, trip } = useAuth()
   const { members } = useMembers()
   const { entries } = useDiary()
+  const { summary: distanceSummary } = useDistances()
   const { summary } = useExpenses()
   const { agenda, update: updateAgenda } = useAgenda()
   const { reviews, saveReview, toggleLike, addComment, deleteReview } = useAgendaReviews()
   const displayName = userProfile?.name ?? currentUser?.displayName ?? currentUser?.email ?? 'viajante'
   const recentEntries = entries.slice(0, 2)
   const totalBudget = Number(trip?.totalBudget ?? 0)
-  const remainingBudget = totalBudget - summary.totalActual
+  const remainingBudget = totalBudget - summary.totalTravelCardActual
   const heroImage = '/familia.png'
   const [selectedMemberId, setSelectedMemberId] = useState('')
   const [planningOpen, setPlanningOpen] = useState(false)
@@ -135,6 +139,8 @@ function DashboardPage() {
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
   const [weatherError, setWeatherError] = useState('')
+  const [sharingCard, setSharingCard] = useState(false)
+  const [shareFeedback, setShareFeedback] = useState('')
   const selectedMember = members.find((member) => member.id === selectedMemberId) ?? null
   const selectedReview = reviews.find((review) => review.id === selectedReviewId) ?? null
   const canManageSelectedMember = canManageMembers(userProfile)
@@ -169,6 +175,26 @@ function DashboardPage() {
 
     return citySet.size
   }, [agenda, todayString, trip.cities])
+  const visitedStatesCount = useMemo(() => {
+    const states = new Set((trip.cities ?? []).map((place) => String(place.state ?? '').trim()).filter(Boolean))
+    const cityStateMap = {
+      belem: 'PA',
+      brasilia: 'DF',
+      salvador: 'BA',
+      itacimirim: 'BA',
+      aracaju: 'SE',
+      'sao cristovao': 'SE',
+    }
+
+    agenda.forEach((item) => {
+      const city = normalizeCityName(item.city)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+      if (cityStateMap[city]) states.add(cityStateMap[city])
+    })
+    return states.size
+  }, [agenda, trip.cities])
   const eventDates = useMemo(
     () => agenda.map((item) => formatDateInput(item.date)).filter(Boolean).sort(),
     [agenda],
@@ -454,8 +480,38 @@ function DashboardPage() {
     }
   }
 
+  async function handleShareTrip() {
+    setSharingCard(true)
+    setShareFeedback('')
+    try {
+      const result = await shareTravelCard({
+        tripName: trip.name,
+        destination: trip.destination,
+        daysTogether,
+        statesVisited: visitedStatesCount,
+        citiesVisited: visitedCitiesCount,
+        distances: distanceSummary,
+      })
+      setShareFeedback(result === 'downloaded'
+        ? 'Imagem salva. Agora você pode publicá-la no Instagram ou WhatsApp.'
+        : 'Card compartilhado com sucesso.')
+    } catch (shareError) {
+      if (shareError.name !== 'AbortError') {
+        setShareFeedback(shareError.message ?? 'Não foi possível compartilhar o card.')
+      }
+    } finally {
+      setSharingCard(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {shareFeedback ? <p className="text-sm text-slate-500">{shareFeedback}</p> : null}
+        <Button icon={<FiShare2 />} onClick={handleShareTrip} disabled={sharingCard}>
+          {sharingCard ? 'Gerando card...' : 'Compartilhar resumo'}
+        </Button>
+      </div>
       <Card className="relative overflow-hidden p-0">
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
@@ -734,13 +790,13 @@ function DashboardPage() {
         )}
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Card>
           <p className="text-sm text-slate-500">Gastos efetivados</p>
           <p className="mt-2 text-xl font-semibold text-slate-950">{formatCurrency(summary.totalActual)}</p>
         </Card>
         <Card>
-          <p className="text-sm text-slate-500">Saldo restante</p>
+          <p className="text-sm text-slate-500">Saldo do Cartão viagem</p>
           <p className={`mt-2 text-xl font-semibold ${remainingBudget < 0 ? 'text-rose-600' : 'text-slate-950'}`}>
             {formatCurrency(remainingBudget)}
           </p>
@@ -757,6 +813,14 @@ function DashboardPage() {
           <p className="text-sm text-slate-500">Dias juntos</p>
           <p className="mt-2 text-xl font-semibold text-slate-950">{daysTogether}</p>
         </Card>
+        <Link to="/distances" className="block">
+          <Card className="h-full transition hover:border-teal-200 hover:bg-teal-50/40">
+            <p className="text-sm text-slate-500">Distância percorrida</p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">
+              {new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(distanceSummary.total)} km
+            </p>
+          </Card>
+        </Link>
       </div>
 
       {!tripIsClosed ? <VisitedPlacesMap today={todayString} /> : null}

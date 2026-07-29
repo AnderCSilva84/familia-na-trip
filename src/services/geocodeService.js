@@ -2,6 +2,9 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+const geocodeCache = new Map()
+const GEOCODE_TIMEOUT_MS = 4500
+
 function normalizePostalCode(value) {
   return String(value ?? '').replace(/\D/g, '').trim()
 }
@@ -37,7 +40,7 @@ export function buildGeocodingQuery(item = {}) {
     .join(', ')
 }
 
-async function enrichAddressFromPostalCode(item = {}) {
+async function enrichAddressFromPostalCode(item = {}, signal) {
   const postalCode = resolvePostalCode(item)
 
   if (postalCode.length !== 8) {
@@ -50,6 +53,7 @@ async function enrichAddressFromPostalCode(item = {}) {
 
   try {
     const response = await fetch(`https://viacep.com.br/ws/${postalCode}/json/`, {
+      signal,
       headers: {
         Accept: 'application/json',
       },
@@ -101,10 +105,11 @@ function buildGeocodingCandidates(item = {}) {
   ].filter(Boolean)
 }
 
-async function fetchGeocodeCandidate(query) {
+async function fetchGeocodeCandidate(query, signal) {
   const response = await fetch(
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`,
     {
+      signal,
       headers: {
         Accept: 'application/json',
       },
@@ -119,11 +124,13 @@ async function fetchGeocodeCandidate(query) {
   return firstResult ?? null
 }
 
-export async function geocodeLocation(item = {}) {
+async function geocodeLocationUncached(item = {}) {
   const latitude = Number(item.latitude)
   const longitude = Number(item.longitude)
+  const hasCoordinates = String(item.latitude ?? '').trim() !== ''
+    && String(item.longitude ?? '').trim() !== ''
 
-  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+  if (hasCoordinates && Number.isFinite(latitude) && Number.isFinite(longitude)) {
     return {
       latitude,
       longitude,
@@ -131,7 +138,9 @@ export async function geocodeLocation(item = {}) {
     }
   }
 
-  const postalCodeData = await enrichAddressFromPostalCode(item)
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), GEOCODE_TIMEOUT_MS)
+  const postalCodeData = await enrichAddressFromPostalCode(item, controller.signal)
   const enrichedItem = {
       ...item,
       address: postalCodeData.address || item.address,
@@ -140,9 +149,10 @@ export async function geocodeLocation(item = {}) {
     }
   const query =
     buildGeocodingQuery(enrichedItem) || String(item.mapQuery ?? '').trim()
-  const candidates = buildGeocodingCandidates(enrichedItem)
+  const candidates = [...new Set(buildGeocodingCandidates(enrichedItem))].slice(0, 4)
 
   if (!query && candidates.length === 0) {
+    window.clearTimeout(timeoutId)
     return {
       latitude: '',
       longitude: '',
@@ -152,9 +162,10 @@ export async function geocodeLocation(item = {}) {
 
   try {
     for (const candidate of candidates) {
-      const firstResult = await fetchGeocodeCandidate(candidate)
+      const firstResult = await fetchGeocodeCandidate(candidate, controller.signal)
 
       if (firstResult) {
+        window.clearTimeout(timeoutId)
         return {
           latitude: Number(firstResult.lat),
           longitude: Number(firstResult.lon),
@@ -163,16 +174,33 @@ export async function geocodeLocation(item = {}) {
       }
     }
 
+    window.clearTimeout(timeoutId)
     return {
       latitude: '',
       longitude: '',
       mapQuery: query || candidates[0] || '',
     }
   } catch {
+    window.clearTimeout(timeoutId)
     return {
       latitude: '',
       longitude: '',
       mapQuery: query || candidates[0] || '',
     }
   }
+
+}
+
+export function geocodeLocation(item = {}) {
+  const cacheKey = buildGeocodingQuery(item).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+  if (!cacheKey) {
+    return geocodeLocationUncached(item)
+  }
+
+  if (!geocodeCache.has(cacheKey)) {
+    geocodeCache.set(cacheKey, geocodeLocationUncached(item))
+  }
+
+  return geocodeCache.get(cacheKey)
 }

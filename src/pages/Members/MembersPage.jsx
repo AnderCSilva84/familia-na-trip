@@ -24,6 +24,7 @@ function MembersPage() {
   const [creatingAccess, setCreatingAccess] = useState(false)
 
   async function handleDelete(memberId) {
+    if (!window.confirm('Tem certeza que deseja excluir este membro da viagem?')) return
     try {
       await deleteMember(memberId)
       setFeedback('Membro removido com sucesso.')

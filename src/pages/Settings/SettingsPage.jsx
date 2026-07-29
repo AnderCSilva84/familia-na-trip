@@ -281,6 +281,10 @@ function SettingsPage() {
             <p className="font-semibold">Mapa da família</p>
             <p className="mt-1 text-teal-700">Cidades e estados que a família já visitou.</p>
           </Link>
+          <Link to="/distances" className="rounded-3xl bg-teal-50 p-4 text-sm text-teal-800 shadow-sm transition hover:bg-teal-100">
+            <p className="font-semibold">Distâncias da viagem</p>
+            <p className="mt-1 text-teal-700">Quilômetros percorridos de avião, carro e andando.</p>
+          </Link>
           <Link
             to="/today"
             className="rounded-3xl bg-slate-50 p-4 text-sm text-slate-700 shadow-sm transition hover:bg-teal-50"

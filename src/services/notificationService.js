@@ -69,6 +69,12 @@ export async function createNotification(data) {
   return { ...payload, createdAt: new Date() }
 }
 
+export function queueNotification(data) {
+  createNotification(data).catch((error) => {
+    console.warn('A informação foi salva, mas a notificação não pôde ser criada.', error)
+  })
+}
+
 export async function getNotificationsByUser(tripId, audience) {
   return new Promise((resolve, reject) => {
     const unsubscribe = subscribeNotificationsByUser(

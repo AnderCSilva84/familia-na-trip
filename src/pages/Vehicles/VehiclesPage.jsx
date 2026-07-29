@@ -17,6 +17,7 @@ function VehiclesPage() {
   const [feedback, setFeedback] = useState('')
 
   async function handleDelete(vehicleId) {
+    if (!window.confirm('Tem certeza que deseja excluir este veículo?')) return
     try {
       await remove(vehicleId)
       setFeedback('Veiculo removido com sucesso.')

@@ -83,6 +83,11 @@ function AlarmsPage() {
     }
   }
 
+  function handleDelete(alarmId) {
+    if (!window.confirm('Tem certeza que deseja excluir este alarme?')) return
+    handleAction(() => remove(alarmId))
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -120,7 +125,7 @@ function AlarmsPage() {
                       canManage={canManage || canDelete}
                       onToggle={canManage ? (nextValue) => handleAction(() => toggle(alarm.id, nextValue)) : undefined}
                       onEdit={canManage ? () => navigate(`/alarms/${alarm.id}/edit`) : undefined}
-                      onDelete={canDelete ? () => handleAction(() => remove(alarm.id)) : undefined}
+                      onDelete={canDelete ? () => handleDelete(alarm.id) : undefined}
                     />
                   )
                 })}

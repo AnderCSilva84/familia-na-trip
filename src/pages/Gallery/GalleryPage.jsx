@@ -5,17 +5,20 @@ import {
   FiChevronRight,
   FiDownload,
   FiImage,
+  FiPlus,
   FiSearch,
   FiTrash2,
+  FiUploadCloud,
   FiX,
 } from 'react-icons/fi'
 import AppImage from '../../components/common/AppImage'
+import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
 import Loading from '../../components/common/Loading'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useAuth from '../../hooks/useAuth'
-import { deleteDiaryPhoto, getDiaryByTrips } from '../../services/diaryService'
+import { createDiaryEntry, deleteDiaryPhoto, getDiaryByTrips } from '../../services/diaryService'
 import { formatDisplayDate } from '../../utils/formatters'
 import { isSuperAdmin } from '../../utils/permissions'
 
@@ -32,13 +35,15 @@ function safeFileName(photo) {
 }
 
 function GalleryPage() {
-  const { trips, userProfile } = useAuth()
+  const { trips, trip, userProfile } = useAuth()
   const [entries, setEntries] = useState([])
   const [tripFilter, setTripFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedPhotoId, setSelectedPhotoId] = useState('')
   const [loading, setLoading] = useState(true)
   const [deletingPhotoId, setDeletingPhotoId] = useState('')
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
 
@@ -96,6 +101,38 @@ function GalleryPage() {
     document.body.appendChild(link)
     link.click()
     link.remove()
+  }
+
+  async function handleUpload(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    const files = form.getAll('photos').filter((file) => file instanceof File && file.size > 0)
+    if (!files.length) {
+      setError('Selecione pelo menos uma foto.')
+      return
+    }
+
+    setUploading(true)
+    setError('')
+    setFeedback('')
+    try {
+      const entry = await createDiaryEntry({
+        tripId: String(form.get('tripId') || trip?.id || ''),
+        title: String(form.get('title') || 'Fotos da viagem').trim(),
+        content: String(form.get('content') || '').trim(),
+        date: String(form.get('date') || new Date().toISOString().slice(0, 10)),
+        createdBy: userProfile.uid,
+      }, files)
+      setEntries((current) => [entry, ...current])
+      setTripFilter('all')
+      setSearch('')
+      setShowUpload(false)
+      setFeedback(`${files.length} ${files.length === 1 ? 'foto publicada' : 'fotos publicadas'} com sucesso.`)
+    } catch (uploadError) {
+      setError(uploadError.message ?? 'Não foi possível publicar as fotos.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleDeletePhoto(photo) {
@@ -185,11 +222,67 @@ function GalleryPage() {
             {trips.map((trip) => <option key={trip.id} value={trip.id}>{trip.name}</option>)}
           </select>
         </div>
+        <div className="mt-4 flex justify-end">
+          <Button icon={<FiPlus />} onClick={() => setShowUpload(true)}>
+            Adicionar fotos
+          </Button>
+        </div>
       </Card>
 
       {loading ? <Loading /> : null}
       <StatusMessage message={error} tone="error" />
       <StatusMessage message={feedback} tone="success" />
+
+      {showUpload ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:items-center">
+          <button type="button" className="absolute inset-0" onClick={() => !uploading && setShowUpload(false)} aria-label="Fechar envio" />
+          <Card className="relative z-10 w-full max-w-xl space-y-5 rounded-[32px]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-teal-700">Nova memória</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-950">Publicar fotos na galeria</h3>
+                <p className="mt-1 text-sm text-slate-500">Todos os membros da família podem adicionar fotos.</p>
+              </div>
+              <button type="button" onClick={() => setShowUpload(false)} disabled={uploading} className="rounded-full bg-slate-100 p-3 text-slate-600">
+                <FiX />
+              </button>
+            </div>
+            <form className="space-y-4" onSubmit={handleUpload}>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                <span>Viagem</span>
+                <select name="tripId" defaultValue={trip?.id ?? trips[0]?.id ?? ''} required className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  {trips.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                  <span>Título do registro</span>
+                  <input name="title" required placeholder="Ex.: Passeio pela Praia do Forte" className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500" />
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                  <span>Data</span>
+                  <input name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} className="rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500" />
+                </label>
+              </div>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                <span>Legenda ou observação</span>
+                <textarea name="content" placeholder="Conte um pouco sobre este momento..." className="min-h-24 rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-teal-500" />
+              </label>
+              <label className="flex flex-col gap-2 rounded-3xl border border-dashed border-teal-300 bg-teal-50 p-5 text-sm font-medium text-teal-800">
+                <span className="flex items-center gap-2"><FiUploadCloud size={20} /> Escolher fotos do celular</span>
+                <input name="photos" type="file" accept="image/*" multiple required className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-teal-700 file:px-4 file:py-2 file:font-semibold file:text-white" />
+                <small className="font-normal text-teal-700">Você pode selecionar várias fotos de uma vez.</small>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <Button type="button" variant="secondary" onClick={() => setShowUpload(false)} disabled={uploading}>Cancelar</Button>
+                <Button type="submit" icon={<FiUploadCloud />} disabled={uploading || trips.length === 0}>
+                  {uploading ? 'Publicando...' : 'Publicar fotos'}
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      ) : null}
       {!loading && !error && allPhotos.length === 0 ? (
         <EmptyState title="A galeria ainda está vazia" description="As fotos adicionadas ao diário de cada viagem aparecerão automaticamente aqui." />
       ) : null}

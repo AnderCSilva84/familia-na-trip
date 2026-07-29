@@ -20,6 +20,7 @@ function TipsPage() {
   const filteredTips = category === 'Todos' ? tips : tips.filter((tip) => tip.category === category)
 
   async function handleDelete(tipId) {
+    if (!window.confirm('Tem certeza que deseja excluir esta dica?')) return
     try {
       await remove(tipId)
       setFeedback('Dica removida com sucesso.')

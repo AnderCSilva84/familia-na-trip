@@ -38,6 +38,7 @@ const pageMeta = [
   { match: '/expenses/new', title: 'Novo gasto', subtitle: 'Registre o gasto da viagem' },
   { match: '/expenses/', title: 'Editar gasto', subtitle: 'Atualize categoria e divisao' },
   { match: '/expenses', title: 'Gastos', subtitle: 'Orcamento sob controle' },
+  { match: '/distances', title: 'Distâncias', subtitle: 'Quilômetros percorridos na viagem' },
   { match: '/agenda/new', title: 'Novo evento', subtitle: 'Adicione compromissos e checkpoints' },
   { match: '/agenda/', title: 'Editar evento', subtitle: 'Atualize a agenda da viagem' },
   { match: '/alarms/new', title: 'Novo alarme', subtitle: 'Crie lembretes para o grupo' },
