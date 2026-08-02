@@ -5,6 +5,7 @@ import {
   createDistance,
   deleteDistance,
   subscribeDistancesByTrip,
+  updateDistanceKilometers,
 } from '../services/distanceService'
 
 function useDistances() {
@@ -38,6 +39,7 @@ function useDistances() {
     loading,
     error,
     create: (data) => createDistance({ ...data, tripId: trip.id, createdBy: userProfile.uid }),
+    updateKilometers: updateDistanceKilometers,
     remove: deleteDistance,
   }
 }

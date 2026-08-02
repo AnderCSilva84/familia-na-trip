@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import BottomNavigation from '../components/layout/BottomNavigation'
 import Header from '../components/layout/Header'
 import PageContainer from '../components/layout/PageContainer'
+import useAppStore from '../store/useAppStore'
 
 const pageMeta = [
   { match: '/trips/new', title: 'Cadastrar trip', subtitle: 'Planeje uma nova viagem ou registre uma aventura passada' },
@@ -64,6 +65,7 @@ function getPageMeta(pathname) {
 
 function AppLayout() {
   const location = useLocation()
+  const tripId = useAppStore((state) => state.trip?.id)
   const meta = getPageMeta(location.pathname)
 
   return (
@@ -90,7 +92,7 @@ function AppLayout() {
           <div className="flex min-h-0 flex-col">
             <Header title={meta.title} subtitle={meta.subtitle} />
             <PageContainer>
-              <Outlet />
+              <Outlet key={tripId || 'sem-trip'} />
             </PageContainer>
             <BottomNavigation />
           </div>

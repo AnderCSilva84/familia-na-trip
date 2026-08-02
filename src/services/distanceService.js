@@ -6,6 +6,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore'
@@ -32,6 +33,7 @@ function mapDistance(id, data) {
     eventDate: data.eventDate ?? '',
     eventEndTime: data.eventEndTime ?? '',
     calculationMethod: data.calculationMethod ?? (data.source === 'manual' ? 'manual' : 'estimate'),
+    calculatedKilometers: data.calculatedKilometers === undefined ? null : Number(data.calculatedKilometers),
     notes: data.notes ?? '',
     createdBy: data.createdBy ?? '',
     createdAt: data.createdAt ?? null,
@@ -71,6 +73,17 @@ export async function createDistance(data) {
 
 export async function deleteDistance(id) {
   await deleteDoc(doc(distancesCollection(), id))
+}
+
+export async function updateDistanceKilometers(id, kilometers, currentItem) {
+  const value = Number(kilometers)
+  if (!Number.isFinite(value) || value < 0.1) throw new Error('Informe uma distancia valida.')
+  await updateDoc(doc(distancesCollection(), id), {
+    kilometers: Number(value.toFixed(1)),
+    calculatedKilometers: currentItem.calculatedKilometers ?? Number(currentItem.kilometers),
+    calculationMethod: currentItem.source === 'manual' ? 'manual' : 'manual_override',
+    updatedAt: serverTimestamp(),
+  })
 }
 
 export function getDistanceCompletionTimestamp(item) {
@@ -210,8 +223,7 @@ async function buildAgendaSuggestion(previous, current) {
   }
 
   const routeKilometers = await fetchRouteKilometers(originCoordinates, destinationCoordinates, mode)
-  const kilometers = routeKilometers
-    ?? haversineKilometers(originCoordinates, destinationCoordinates) * multiplier
+  const kilometers = routeKilometers ?? haversineKilometers(originCoordinates, destinationCoordinates) * multiplier
   if (!Number.isFinite(kilometers) || kilometers < 0.1) {
     return null
   }
@@ -221,7 +233,7 @@ async function buildAgendaSuggestion(previous, current) {
     mode,
     origin: explicitOrigin || previousEvent.local || previousEvent.title || previousCity,
     destination: explicitDestination || current.local || current.title || currentCity,
-    kilometers: ['walking', 'transit'].includes(mode) ? Number(kilometers.toFixed(1)) : Math.round(kilometers),
+    kilometers: Number(kilometers.toFixed(1)),
     date: current.date ?? '',
     eventDate: current.date ?? '',
     eventEndTime: current.endTime || current.startTime || '',
@@ -263,17 +275,22 @@ export async function syncAgendaDistanceSuggestions({ tripId, createdBy, agenda 
     }
 
     const current = existing.data()
-    const changed = current.mode !== suggestion.mode
+    const manuallyAdjusted = current.calculationMethod === 'manual_override'
+    const synchronizedSuggestion = manuallyAdjusted
+      ? { ...suggestion, kilometers: Number(current.kilometers), calculationMethod: 'manual_override', calculatedKilometers: suggestion.kilometers }
+      : suggestion
+    const changed = current.mode !== synchronizedSuggestion.mode
       || current.origin !== suggestion.origin
       || current.destination !== suggestion.destination
-      || Number(current.kilometers) !== Number(suggestion.kilometers)
+      || Number(current.kilometers) !== Number(synchronizedSuggestion.kilometers)
       || current.date !== suggestion.date
       || current.eventDate !== suggestion.eventDate
       || current.eventEndTime !== suggestion.eventEndTime
-      || current.calculationMethod !== suggestion.calculationMethod
+      || current.calculationMethod !== synchronizedSuggestion.calculationMethod
+      || (manuallyAdjusted && Number(current.calculatedKilometers) !== Number(suggestion.kilometers))
 
     if (changed) {
-      operations.push({ type: 'update', ref: existing.ref, suggestion })
+      operations.push({ type: 'update', ref: existing.ref, suggestion: synchronizedSuggestion })
     }
   })
 

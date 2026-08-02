@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FiNavigation, FiPlus, FiTrash2 } from 'react-icons/fi'
+import { FiEdit2, FiNavigation, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
@@ -22,10 +22,11 @@ function formatKilometers(value) {
 
 function DistancesPage() {
   const { userProfile } = useAuth()
-  const { distances, summary, loading, error, create, remove } = useDistances()
+  const { distances, summary, loading, error, create, remove, updateKilometers } = useDistances()
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [editingDistance, setEditingDistance] = useState(null)
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -58,6 +59,18 @@ function DistancesPage() {
       setFeedback('Trecho removido com sucesso.')
     } catch (deleteError) {
       setFeedback(deleteError.message ?? 'Não foi possível remover o trecho.')
+    }
+  }
+
+  async function handleDistanceCorrection(event) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    try {
+      await updateKilometers(editingDistance.id, form.get('kilometers'), editingDistance)
+      setEditingDistance(null)
+      setFeedback('Distância ajustada com sucesso. O valor automático foi preservado para comparação.')
+    } catch (updateError) {
+      setFeedback(updateError.message ?? 'Não foi possível ajustar a distância.')
     }
   }
 
@@ -127,7 +140,7 @@ function DistancesPage() {
         {distances.map((item) => {
           const canDelete = canEditAnyContent(userProfile) || canEditOwnContent(userProfile, item)
           return (
-            <Card key={item.id} className="flex items-center justify-between gap-4">
+            <Card key={item.id} className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
                 <span className="text-3xl">{modes[item.mode]?.emoji ?? '🧭'}</span>
                 <div className="min-w-0">
@@ -139,21 +152,27 @@ function DistancesPage() {
                         : item.source === 'suggested'
                           ? item.calculationMethod === 'route'
                             ? 'rota real calculada automaticamente'
+                            : item.calculationMethod === 'manual_override'
+                              ? 'valor automático ajustado manualmente'
                             : 'estimativa automática'
                           : 'estimativa revisável'
                     }
                   </p>
                   {item.notes ? <p className="mt-1 text-xs text-slate-400">{item.notes}</p> : null}
+                  {item.calculationMethod === 'manual_override' && item.calculatedKilometers ? <p className="mt-1 text-xs text-slate-400">Calculado originalmente: {formatKilometers(item.calculatedKilometers)}</p> : null}
                 </div>
               </div>
               <div className="shrink-0 text-right">
                 <p className="font-semibold text-teal-700">{formatKilometers(item.kilometers)}</p>
-                {canDelete ? (
-                  <button className="mt-2 text-rose-500" onClick={() => handleDelete(item.id)} aria-label={`Remover ${item.origin} para ${item.destination}`}>
-                    <FiTrash2 />
-                  </button>
-                ) : null}
+                {canDelete ? <div className="mt-2 flex justify-end gap-3"><button className="text-teal-700" onClick={() => setEditingDistance(item)} aria-label={`Ajustar distância de ${item.origin} para ${item.destination}`}><FiEdit2 /></button><button className="text-rose-500" onClick={() => handleDelete(item.id)} aria-label={`Remover ${item.origin} para ${item.destination}`}><FiTrash2 /></button></div> : null}
               </div>
+              {editingDistance?.id === item.id ? (
+                <form onSubmit={handleDistanceCorrection} className="flex w-full flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
+                  <label className="flex flex-1 flex-col gap-1 text-xs font-semibold text-slate-600"><span>Quilometragem correta</span><input name="kilometers" type="number" min="0.1" step="0.1" required defaultValue={item.kilometers} className="rounded-xl border border-slate-200 px-3 py-2 text-sm" /></label>
+                  <Button type="submit">Aplicar ajuste</Button>
+                  <Button type="button" variant="ghost" icon={<FiX />} onClick={() => setEditingDistance(null)}>Cancelar</Button>
+                </form>
+              ) : null}
             </Card>
           )
         })}

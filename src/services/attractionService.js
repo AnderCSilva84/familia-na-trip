@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore'
 import { db, ensureFirebaseConfigured } from '../firebase/config'
 import { subscribeToQuery } from './firestoreRealtime'
 
@@ -20,6 +20,9 @@ function mapAttraction(id, data) {
     image: data.image ?? '',
     sourceItineraryId: data.sourceItineraryId ?? '',
     sourceAgendaId: data.sourceAgendaId ?? '',
+    sourceExternalId: data.sourceExternalId ?? '',
+    latitude: data.latitude ?? '',
+    longitude: data.longitude ?? '',
     visited: Boolean(data.visited),
     visitedBy: data.visitedBy ?? '',
     visitedAt: data.visitedAt ?? null,
@@ -79,6 +82,10 @@ async function findAttractionByAgendaId(agendaId) {
 }
 
 export async function syncAttractionFromAgenda(agendaItem) {
+  if (agendaItem.sourceAttractionId) {
+    const catalogItem = await getDoc(doc(attractionsCollection(), agendaItem.sourceAttractionId))
+    if (catalogItem.exists()) return catalogItem.id
+  }
   const existing = await findAttractionByAgendaId(agendaItem.id)
   const payload = {
     tripId: agendaItem.tripId,
@@ -90,6 +97,9 @@ export async function syncAttractionFromAgenda(agendaItem) {
     link: agendaItem.link || '',
     image: agendaItem.image || '',
     sourceAgendaId: agendaItem.id,
+    sourceExternalId: agendaItem.sourceExternalId ?? '',
+    latitude: agendaItem.latitude ?? '',
+    longitude: agendaItem.longitude ?? '',
     createdBy: agendaItem.createdBy,
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import Button from '../../components/common/Button'
 import Card from '../../components/common/Card'
 import EmptyState from '../../components/common/EmptyState'
@@ -47,6 +47,7 @@ function normalizeTime24(value) {
 
 function AgendaFormContent({
   editingEvent,
+  suggestedEvent,
   eventId,
   usingMockData,
   create,
@@ -58,7 +59,7 @@ function AgendaFormContent({
   onTripUpdate,
 }) {
   const { documents, loading: walletLoading, error: walletError } = useWallet()
-  const initialEvent = editingEvent ?? null
+  const initialEvent = editingEvent ?? suggestedEvent ?? null
   const initialDate = formatDateInput(initialEvent?.date)
   const [date, setDate] = useState(initialDate)
   const [selectedType, setSelectedType] = useState(initialEvent?.type ?? 'evento')
@@ -150,6 +151,8 @@ function AgendaFormContent({
         membersToNotify: [],
         alarmTime: selectedType === 'alarme' ? startTime : '',
         relatedId: initialEvent?.relatedId ?? '',
+        sourceExternalId: initialEvent?.sourceExternalId ?? '',
+        sourceAttractionId: initialEvent?.sourceAttractionId ?? '',
       }
 
       if (eventId) await update(eventId, payload)
@@ -398,11 +401,13 @@ function AgendaFormContent({
 
 function AgendaFormPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { eventId } = useParams()
   const { agenda, loading, error, usingMockData, create, update } = useAgenda()
   const { trip, trips, setTrip, setTrips } = useAuth()
   const userProfile = useAppStore((state) => state.userProfile)
   const editingEvent = agenda.find((item) => item.id === eventId)
+  const suggestedEvent = !eventId ? location.state?.attractionSuggestion ?? null : null
 
   function handleTripUpdate(updatedTrip) {
     setTrip(updatedTrip)
@@ -417,8 +422,9 @@ function AgendaFormPage() {
 
   return (
     <AgendaFormContent
-      key={editingEvent?.id ?? 'new-event'}
+      key={editingEvent?.id ?? suggestedEvent?.sourceExternalId ?? 'new-event'}
       editingEvent={editingEvent}
+      suggestedEvent={suggestedEvent}
       eventId={eventId}
       usingMockData={usingMockData}
       create={create}

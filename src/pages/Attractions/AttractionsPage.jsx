@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FiCalendar, FiCheck, FiEdit2, FiExternalLink, FiMapPin, FiPlus, FiTrash2, FiX } from 'react-icons/fi'
+import { FiCalendar, FiCheck, FiCompass, FiEdit2, FiExternalLink, FiMapPin, FiPlus, FiSearch, FiTrash2, FiX } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import AppImage from '../../components/common/AppImage'
 import Button from '../../components/common/Button'
@@ -13,6 +13,8 @@ import useAgenda from '../../hooks/useAgenda'
 import useItinerary from '../../hooks/useItinerary'
 import { formatDisplayDate } from '../../utils/formatters'
 import { canDeleteAnyContent, canDeleteOwnContent, canEditAnyContent, canEditOwnContent } from '../../utils/permissions'
+import useAppStore from '../../store/useAppStore'
+import { fetchTouristSuggestions } from '../../services/touristSuggestionService'
 
 const filters = [
   { value: 'all', label: 'Todos' },
@@ -36,10 +38,17 @@ export default function AttractionsPage() {
   const navigate = useNavigate()
   const { userProfile } = useAuth()
   const { items, loading, error, toggleVisited, deleteItem, createItem } = useAttractions()
+  const trip = useAppStore((state) => state.trip)
   const { agenda } = useAgenda()
   const { items: itineraryItems } = useItinerary()
   const [filter, setFilter] = useState('all')
   const [showItinerary, setShowItinerary] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [suggestionCityIndex, setSuggestionCityIndex] = useState(0)
+  const [suggestionRadius, setSuggestionRadius] = useState(20)
+  const [suggestions, setSuggestions] = useState([])
+  const [selectedSuggestions, setSelectedSuggestions] = useState([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
   const [feedback, setFeedback] = useState('')
   const visitedCount = items.filter((item) => item.visited).length
   const visibleItems = items.filter((item) => filter === 'all' || (filter === 'visited' ? item.visited : !item.visited))
@@ -112,6 +121,93 @@ export default function AttractionsPage() {
     }
   }
 
+  async function handleSearchSuggestions() {
+    const city = trip?.cities?.[suggestionCityIndex]
+    if (!city) return setFeedback('Cadastre ao menos uma cidade na viagem para receber sugestoes.')
+    setLoadingSuggestions(true)
+    setFeedback('')
+    try {
+      const found = await fetchTouristSuggestions(city, suggestionRadius)
+      const available = found.filter((suggestion) => !items.some((item) =>
+        item.sourceExternalId === suggestion.id
+        || (item.name.trim().toLocaleLowerCase('pt-BR') === suggestion.name.trim().toLocaleLowerCase('pt-BR')
+          && item.city.trim().toLocaleLowerCase('pt-BR') === suggestion.city.trim().toLocaleLowerCase('pt-BR'))))
+      setSuggestions(available)
+      setSelectedSuggestions([])
+      setFeedback(available.length ? `${available.length} sugestoes encontradas. Selecione as que deseja visitar.` : 'Nenhuma sugestao nova encontrada nessa area.')
+    } catch (searchError) {
+      setFeedback(searchError.message ?? 'Nao foi possivel buscar sugestoes agora.')
+    } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
+  function toggleSuggestion(id) {
+    setSelectedSuggestions((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
+
+  async function handleAddSuggestions() {
+    const selected = suggestions.filter((suggestion) => selectedSuggestions.includes(suggestion.id))
+    if (!selected.length) return
+    setLoadingSuggestions(true)
+    try {
+      await Promise.all(selected.map((suggestion) => createItem({
+        name: suggestion.name,
+        city: [suggestion.city, suggestion.state].filter(Boolean).join(' - '),
+        category: suggestion.category,
+        description: suggestion.description,
+        address: suggestion.address,
+        link: suggestion.link,
+        image: suggestion.image,
+        latitude: suggestion.latitude,
+        longitude: suggestion.longitude,
+        sourceExternalId: suggestion.id,
+      })))
+      setSuggestions((current) => current.filter((suggestion) => !selectedSuggestions.includes(suggestion.id)))
+      setSelectedSuggestions([])
+      setFeedback(`${selected.length} atracao(oes) salva(s) no catalogo da trip.`)
+    } catch (saveError) {
+      setFeedback(saveError.message ?? 'Nao foi possivel salvar todas as atracoes no catalogo.')
+    } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
+  function handleScheduleAttraction(item) {
+    navigate('/agenda/new', { state: { attractionSuggestion: {
+      title: item.name,
+      date: trip?.startDate ?? '',
+      city: item.city,
+      local: item.name,
+      address: item.address,
+      postalCode: item.address?.match(/\b\d{5}-?\d{3}\b/)?.[0] ?? '',
+      description: item.description,
+      instructions: '',
+      startTime: '',
+      endTime: '',
+      estimatedCost: '',
+      actualCost: '',
+      latitude: item.latitude,
+      longitude: item.longitude,
+      travelMode: '',
+      routeOrigin: '',
+      routeDestination: item.address || item.name,
+      location: [item.city, item.name].filter(Boolean).join(' - '),
+      expenseCategory: 'Outros',
+      type: 'ponto_turistico',
+      walletDocumentId: '',
+      walletDocumentName: '',
+      walletDocumentUrl: '',
+      link: item.link,
+      image: item.image,
+      imagePath: '',
+      sourceExternalId: item.sourceExternalId ?? '',
+      sourceAttractionId: item.id,
+      creatorName: userProfile?.name ?? '',
+      creatorPhotoURL: userProfile?.photoURL ?? '',
+    } } })
+  }
+
   return (
     <div className="space-y-5">
       <Card className="bg-[linear-gradient(135deg,#f0fdfa,#fff)]">
@@ -136,12 +232,59 @@ export default function AttractionsPage() {
           ))}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" icon={showSuggestions ? <FiX /> : <FiCompass />} onClick={() => setShowSuggestions((value) => !value)}>
+            {showSuggestions ? 'Fechar sugestoes' : 'Sugerir pela cidade'}
+          </Button>
           <Button variant="secondary" icon={showItinerary ? <FiX /> : <FiCalendar />} onClick={() => setShowItinerary((value) => !value)}>
             {showItinerary ? 'Fechar roteiros' : 'Selecionar do roteiro'}
           </Button>
           <Button icon={<FiPlus />} onClick={() => navigate('/attractions/new')}>Adicionar manualmente</Button>
         </div>
       </div>
+
+      {showSuggestions ? (
+        <Card className="space-y-4 border-teal-100 bg-teal-50/50">
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">Sugestoes para o destino</h2>
+            <p className="mt-1 text-sm text-slate-500">Escolha a cidade e o alcance da busca. Nada entra na viagem sem a sua selecao.</p>
+          </div>
+          {trip?.cities?.length ? (
+            <div className="grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                <span>Cidade</span>
+                <select value={suggestionCityIndex} onChange={(event) => setSuggestionCityIndex(Number(event.target.value))} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  {trip.cities.map((city, index) => <option key={`${city.city}-${city.state}`} value={index}>{[city.city, city.state].filter(Boolean).join(' - ')}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+                <span>Raio da busca</span>
+                <select value={suggestionRadius} onChange={(event) => setSuggestionRadius(Number(event.target.value))} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <option value="5">5 km</option><option value="10">10 km</option><option value="20">20 km</option><option value="35">35 km</option><option value="50">50 km</option>
+                </select>
+              </label>
+              <Button className="self-end" icon={<FiSearch />} disabled={loadingSuggestions} onClick={handleSearchSuggestions}>{loadingSuggestions ? 'Buscando...' : 'Buscar'}</Button>
+            </div>
+          ) : <p className="rounded-2xl bg-white p-4 text-sm text-slate-500">Edite a viagem e informe as cidades para ativar as sugestoes.</p>}
+          {suggestions.length ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-700">{selectedSuggestions.length} de {suggestions.length} selecionado(s)</p>
+                <Button disabled={!selectedSuggestions.length || loadingSuggestions} onClick={handleAddSuggestions}>Salvar no catálogo</Button>
+              </div>
+              <div className="grid max-h-[32rem] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                {suggestions.map((suggestion) => (
+                  <label key={suggestion.id} className={`flex cursor-pointer items-start gap-3 rounded-2xl border bg-white p-3 ${selectedSuggestions.includes(suggestion.id) ? 'border-teal-500 ring-2 ring-teal-100' : 'border-slate-100'}`}>
+                    <input type="checkbox" checked={selectedSuggestions.includes(suggestion.id)} onChange={() => toggleSuggestion(suggestion.id)} className="mt-1 h-4 w-4 accent-teal-700" />
+                    {suggestion.image ? <AppImage src={suggestion.image} alt={suggestion.name} className="h-20 w-24 shrink-0 rounded-xl object-cover" fallbackClassName="h-20 w-24 shrink-0 rounded-xl" fallbackLabel="Atracao" /> : null}
+                    <span className="min-w-0"><strong className="block text-slate-900">{suggestion.name}</strong><span className="block text-xs text-teal-700">{categoryLabels[suggestion.category] ?? 'Atracao'}</span>{suggestion.address ? <span className="mt-1 block text-xs text-slate-500">{suggestion.address}</span> : null}{suggestion.imageSource === 'wikimedia-commons' ? <span className="mt-1 block text-[10px] text-slate-400">Foto: Wikimedia Commons</span> : null}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          <p className="text-xs text-slate-400">Dados de locais: OpenStreetMap contributors.</p>
+        </Card>
+      ) : null}
 
       {showItinerary ? (
         <Card className="space-y-3 border-teal-100 bg-teal-50/50">
@@ -206,6 +349,7 @@ export default function AttractionsPage() {
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${item.visited ? 'bg-teal-100 text-teal-800' : 'bg-amber-50 text-amber-700'}`}>{item.visited ? 'Visitado' : 'Pendente'}</span>
                       {item.link ? <a href={item.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-teal-700"><FiExternalLink />Abrir link</a> : null}
                     </div>
+                    <Button icon={<FiCalendar />} onClick={() => handleScheduleAttraction(item)}>Adicionar à agenda</Button>
                   </div>
                 </div>
                 {canEdit || canDelete ? <div className="mt-4 flex gap-3 border-t border-slate-100 pt-4">

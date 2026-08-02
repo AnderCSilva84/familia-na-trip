@@ -46,7 +46,7 @@ function MedicalCard({ profile }) {
 }
 
 export default function MedicalPage() {
-  const { userProfile, trip } = useAuth()
+  const { userProfile } = useAuth()
   const { members } = useMembers()
   const admin = canEditAnyContent(userProfile)
   const [selectedUserId, setSelectedUserId] = useState(userProfile.uid)
@@ -65,7 +65,7 @@ export default function MedicalPage() {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     try {
-      const next = { tripId: trip.id, fullName: String(form.get('fullName')), bloodType: String(form.get('bloodType')), allergies: String(form.get('allergies')), medications: String(form.get('medications')), healthPlan: String(form.get('healthPlan')), planNumber: String(form.get('planNumber')), emergencyContact: String(form.get('emergencyContact')), emergencyPhone: String(form.get('emergencyPhone')), notes: String(form.get('notes')) }
+      const next = { fullName: String(form.get('fullName')), bloodType: String(form.get('bloodType')), allergies: String(form.get('allergies')), medications: String(form.get('medications')), healthPlan: String(form.get('healthPlan')), planNumber: String(form.get('planNumber')), emergencyContact: String(form.get('emergencyContact')), emergencyPhone: String(form.get('emergencyPhone')), notes: String(form.get('notes')) }
       await saveMedicalProfile(selectedUserId, next)
       setProfile(next); setEditing(false); setFeedback('Cartao medico salvo com sucesso.')
     } catch (error) { setFeedback(error.message ?? 'Nao foi possivel salvar.') }
