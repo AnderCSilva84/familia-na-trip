@@ -1,4 +1,4 @@
-import { normalizeDisplayTime } from './formatters'
+import { normalizeDisplayTime } from './formatters.js'
 
 function normalizeText(value) {
   return String(value ?? '')

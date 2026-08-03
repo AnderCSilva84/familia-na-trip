@@ -6,7 +6,7 @@ function WelcomePage() {
   const { isAuthenticated } = useAuth()
 
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" replace />
+    return <Navigate to="/today" replace />
   }
 
   return (

@@ -6,7 +6,6 @@ import PrivateRoute from './PrivateRoute'
 import Loading from '../components/common/Loading'
 import WelcomePage from '../pages/Auth/WelcomePage'
 import LoginPage from '../pages/Auth/LoginPage'
-const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage'))
 const MapPage = lazy(() => import('../pages/Map/MapPage'))
 const MembersPage = lazy(() => import('../pages/Members/MembersPage'))
 const MemberFormPage = lazy(() => import('../pages/Members/MemberFormPage'))
@@ -48,6 +47,10 @@ const TripFormPage = lazy(() => import('../pages/Trips/TripFormPage'))
 const GalleryPage = lazy(() => import('../pages/Gallery/GalleryPage'))
 const TravelHistoryMapPage = lazy(() => import('../pages/Map/TravelHistoryMapPage'))
 const DistancesPage = lazy(() => import('../pages/Distances/DistancesPage'))
+const PlanningPage = lazy(() => import('../pages/Planning/PlanningPage'))
+const ReservationsPage = lazy(() => import('../pages/Reservations/ReservationsPage'))
+const MemoriesPage = lazy(() => import('../pages/Memories/MemoriesPage'))
+const RetrospectivePage = lazy(() => import('../pages/Memories/RetrospectivePage'))
 
 function renderPage(Component) {
   return (
@@ -66,7 +69,11 @@ function AppRoutes() {
 
         <Route element={<PrivateRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={renderPage(DashboardPage)} />
+            <Route path="/dashboard" element={<Navigate to="/today" replace />} />
+            <Route path="/planning" element={renderPage(PlanningPage)} />
+            <Route path="/reservations" element={renderPage(ReservationsPage)} />
+            <Route path="/memories" element={renderPage(MemoriesPage)} />
+            <Route path="/retrospective" element={renderPage(RetrospectivePage)} />
             <Route path="/trips" element={renderPage(TripsPage)} />
             <Route path="/gallery" element={renderPage(GalleryPage)} />
             <Route path="/map" element={renderPage(MapPage)} />

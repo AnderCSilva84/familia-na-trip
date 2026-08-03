@@ -9,11 +9,12 @@ import useAuth from '../../hooks/useAuth'
 import useNotifications from '../../hooks/useNotifications'
 import { changeCurrentUserPassword, syncCurrentAuthProfile } from '../../services/authService'
 import { syncMemberProfile } from '../../services/memberService'
-import { updateTrip } from '../../services/tripService'
+import { updateTrip, uploadTripMenuImage } from '../../services/tripService'
 import { updateUserProfile, uploadUserProfilePhoto } from '../../services/userService'
 import useAppStore from '../../store/useAppStore'
 import { Link } from 'react-router-dom'
 import { canPromoteAdmins, getUserRoleLabel } from '../../utils/permissions'
+import { menuImageOptions } from '../../utils/menuImages'
 function SettingsPage() {
   const { currentUser, userProfile, trip, logout } = useAuth()
   const { alarms } = useAlarms()
@@ -172,9 +173,20 @@ function SettingsPage() {
 
     try {
       const formData = new FormData(event.currentTarget)
+      const menuImages = { ...(trip?.menuImages ?? {}) }
+      if (canPromoteAdmins(userProfile)) {
+        for (const option of menuImageOptions) {
+          const selectedFile = formData.get(`menuFile_${option.key}`)
+          const urlValue = String(formData.get(`menuImage_${option.key}`) ?? '').trim()
+          menuImages[option.key] = selectedFile instanceof File && selectedFile.size > 0
+            ? await uploadTripMenuImage(trip.id, option.key, selectedFile)
+            : urlValue
+        }
+      }
       const nextTrip = await updateTrip(trip.id, {
         coverImage: String(formData.get('coverImage') ?? ''),
         nextStopImage: String(formData.get('nextStopImage') ?? ''),
+        menuImages,
       })
       setTrip(nextTrip)
       setFeedback('Imagens da viagem atualizadas com sucesso.')
@@ -443,6 +455,13 @@ function SettingsPage() {
         <form className="space-y-3" onSubmit={handleTripSubmit}>
           <Input name="coverImage" label="Foto principal da viagem (URL)" defaultValue={trip?.coverImage ?? ''} />
           <Input name="nextStopImage" label="Foto da proxima parada (URL)" defaultValue={trip?.nextStopImage ?? ''} />
+          {canPromoteAdmins(userProfile) ? <div className="space-y-4 rounded-3xl border border-teal-100 bg-teal-50/50 p-4">
+            <div><h4 className="font-semibold text-slate-950">Imagens dos menus</h4><p className="mt-1 text-sm text-slate-500">Configuração exclusiva do superadmin. Escolha uma foto ou informe uma URL para cada janela.</p></div>
+            <div className="grid gap-4 lg:grid-cols-2">{menuImageOptions.map((option) => {
+              const currentImage = trip?.menuImages?.[option.key] || option.fallback
+              return <div key={option.key} className="overflow-hidden rounded-3xl bg-white shadow-sm"><img src={currentImage} alt={option.label} className="h-32 w-full object-cover"/><div className="space-y-3 p-4"><p className="font-semibold text-slate-900">{option.label}</p><Input name={`menuImage_${option.key}`} label="URL da imagem" defaultValue={trip?.menuImages?.[option.key] ?? ''}/><label className="flex flex-col gap-2 text-sm font-medium text-slate-600"><span>Ou escolher da galeria</span><input name={`menuFile_${option.key}`} type="file" accept="image/*" className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm file:mr-2 file:rounded-full file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-teal-700"/></label></div></div>
+            })}</div>
+          </div> : null}
           <Button type="submit" className="w-full" disabled={savingTrip || !trip?.id}>
             {savingTrip ? 'Salvando viagem...' : 'Salvar imagens da viagem'}
           </Button>

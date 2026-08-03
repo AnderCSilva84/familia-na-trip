@@ -8,11 +8,15 @@ import Loading from '../../components/common/Loading'
 import ErrorState from '../../components/feedback/ErrorState'
 import StatusMessage from '../../components/feedback/StatusMessage'
 import useHotels from '../../hooks/useHotels'
+import useAuth from '../../hooks/useAuth'
+import AppImage from '../../components/common/AppImage'
+import { uploadHotelImage } from '../../services/hotelService'
 import { formatDateInput } from '../../utils/formatters'
 import { getLinkPreviewData } from '../../utils/linkPreview'
 
 function HotelFormPage() {
   const navigate = useNavigate()
+  const { trip } = useAuth()
   const { hotelId } = useParams()
   const { hotels, loading, error, usingMockData, create, update } = useHotels()
   const [submitting, setSubmitting] = useState(false)
@@ -20,6 +24,7 @@ function HotelFormPage() {
   const editingHotel = hotels.find((hotel) => hotel.id === hotelId)
   const [reservationLink, setReservationLink] = useState(editingHotel?.link ?? '')
   const [imageUrl, setImageUrl] = useState(editingHotel?.image ?? '')
+  const [imageFile, setImageFile] = useState(null)
 
   useEffect(() => {
     if (!editingHotel) {
@@ -58,6 +63,7 @@ function HotelFormPage() {
 
     try {
       const formData = new FormData(event.currentTarget)
+      const resolvedImageUrl = imageFile ? await uploadHotelImage(trip.id, imageFile) : imageUrl
       const payload = {
         title: String(formData.get('title') ?? ''),
         hotelName: String(formData.get('hotelName') ?? ''),
@@ -67,7 +73,7 @@ function HotelFormPage() {
         estimatedValue: Number(formData.get('estimatedValue') ?? 0),
         finalValue: Number(formData.get('finalValue') ?? 0),
         link: reservationLink,
-        image: imageUrl,
+        image: resolvedImageUrl,
         mapX: String(formData.get('mapX') ?? ''),
         mapY: String(formData.get('mapY') ?? ''),
         status: String(formData.get('status') ?? 'pesquisando'),
@@ -129,15 +135,19 @@ function HotelFormPage() {
             onChange={(event) => setImageUrl(event.target.value)}
             placeholder="https://..."
           />
+          <label className="flex flex-col gap-2 text-sm font-medium text-slate-600">
+            <span>Ou escolher foto do hotel</span>
+            <input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 file:mr-3 file:rounded-full file:border-0 file:bg-blue-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-blue-700"/>
+          </label>
           {imageUrl ? (
-            <img
+            <AppImage
               src={imageUrl}
               alt={editingHotel?.hotelName ?? 'Preview da hospedagem'}
-              loading="lazy"
-              decoding="async"
               className="h-48 w-full rounded-[28px] object-cover"
+              fallbackClassName="h-48 w-full rounded-[28px]"
             />
           ) : null}
+          {imageFile ? <p className="text-sm font-medium text-blue-700">Foto selecionada: {imageFile.name}</p> : null}
           <div className="grid grid-cols-2 gap-3">
             <Input name="mapX" label="Posicao X (%)" defaultValue={editingHotel?.mapX ?? ''} />
             <Input name="mapY" label="Posicao Y (%)" defaultValue={editingHotel?.mapY ?? ''} />

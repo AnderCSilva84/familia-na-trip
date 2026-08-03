@@ -11,7 +11,8 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore'
-import { db, ensureFirebaseConfigured } from '../firebase/config'
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
+import { db, ensureFirebaseConfigured, storage } from '../firebase/config'
 import { resolveMapMetadata } from '../utils/locationPresets'
 import { createAgendaEvent } from './agendaService'
 import { queueNotification } from './notificationService'
@@ -21,6 +22,16 @@ import { geocodeLocation } from './geocodeService'
 function hotelsCollection() {
   ensureFirebaseConfigured()
   return collection(db, 'hotelReservations')
+}
+
+export async function uploadHotelImage(tripId, file) {
+  ensureFirebaseConfigured()
+  if (!file || !String(file.type ?? '').startsWith('image/')) throw new Error('Escolha um arquivo de imagem válido.')
+  if (file.size > 15 * 1024 * 1024) throw new Error('A imagem deve ter no máximo 15 MB.')
+  const safeName = String(file.name || 'hotel.jpg').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]+/gi, '-')
+  const fileRef = ref(storage, `trips/${tripId}/hotels/${Date.now()}-${safeName}`)
+  await uploadBytes(fileRef, file, { contentType: file.type })
+  return getDownloadURL(fileRef)
 }
 
 function mapHotel(id, data) {

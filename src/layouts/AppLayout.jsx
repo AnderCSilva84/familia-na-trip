@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import BottomNavigation from '../components/layout/BottomNavigation'
 import Header from '../components/layout/Header'
 import PageContainer from '../components/layout/PageContainer'
+import QuickActionButton from '../components/layout/QuickActionButton'
 import useAppStore from '../store/useAppStore'
 
 const pageMeta = [
@@ -11,6 +12,10 @@ const pageMeta = [
   { match: '/gallery', title: 'Galeria', subtitle: 'Fotos e memórias de todas as viagens' },
   { match: '/travel-history', title: 'Mapa da família', subtitle: 'Todas as cidades e estados já visitados' },
   { match: '/dashboard', title: 'Inicio', subtitle: 'Sua viagem em um so lugar' },
+  { match: '/planning', title: 'Planejamento', subtitle: 'Programação, lugares e preparativos' },
+  { match: '/reservations', title: 'Reservas', subtitle: 'Hospedagens, transportes e documentos' },
+  { match: '/memories', title: 'Memórias', subtitle: 'Histórias, fotos e lugares da família' },
+  { match: '/retrospective', title: 'Retrospectiva', subtitle: 'Planejado, realizado e lembranças da viagem' },
   { match: '/map', title: 'Mapa', subtitle: 'Paradas, rotas e pontos de encontro' },
   { match: '/members/manage', title: 'Acesso', subtitle: 'Criar ou editar participante da viagem' },
   { match: '/members', title: 'Acessos', subtitle: 'Quem esta nessa trip e como entra no app' },
@@ -95,6 +100,7 @@ function AppLayout() {
               <Outlet key={tripId || 'sem-trip'} />
             </PageContainer>
             <BottomNavigation />
+            <QuickActionButton />
           </div>
         </div>
       </div>

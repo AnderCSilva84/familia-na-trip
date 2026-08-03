@@ -47,7 +47,7 @@ function LoginPage() {
       await login(form.email, form.password)
       setFeedback('Login realizado com sucesso.')
 
-      navigate('/dashboard')
+      navigate('/today')
     } catch (submitError) {
       setError(submitError.message ?? 'Nao foi possivel autenticar.')
     } finally {

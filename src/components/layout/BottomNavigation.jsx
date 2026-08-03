@@ -1,15 +1,15 @@
-import { FiCalendar, FiCamera, FiHome, FiMap, FiMenu } from 'react-icons/fi'
+import { FiCompass, FiDollarSign, FiHome, FiMap, FiStar } from 'react-icons/fi'
 import { NavLink } from 'react-router-dom'
 import useAlarms from '../../hooks/useAlarms'
 import useNotifications from '../../hooks/useNotifications'
 
 const items = [
-  { to: '/dashboard', label: 'Inicio', icon: FiHome },
+  { to: '/today', label: 'Hoje', icon: FiHome },
+  { to: '/planning', label: 'Planejar', icon: FiCompass },
   { to: '/map', label: 'Mapa', icon: FiMap },
-  { to: '/agenda', label: 'Agenda', icon: FiCalendar },
-  { to: '/gallery', label: 'Galeria', icon: FiCamera, desktopOnly: true },
-  { to: '/travel-history', label: 'Mapa da família', icon: FiMap, desktopOnly: true },
-  { to: '/settings', label: 'Menu', icon: FiMenu },
+  { to: '/expenses', label: 'Gastos', icon: FiDollarSign },
+  { to: '/memories', label: 'Memórias', icon: FiStar },
+  { to: '/reservations', label: 'Reservas', icon: FiCompass, desktopOnly: true },
 ]
 
 function BottomNavigation({ variant = 'mobile' }) {
@@ -35,7 +35,7 @@ function BottomNavigation({ variant = 'mobile' }) {
           : 'safe-bottom fixed bottom-4 left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-white/80 bg-white/95 px-3 py-3 shadow-[0_20px_60px_rgba(15,118,110,0.18)] backdrop-blur-xl lg:hidden'
       }
     >
-      <ul className={isDesktop ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-4 gap-2'}>
+      <ul className={isDesktop ? 'grid grid-cols-1 gap-2' : 'grid grid-cols-5 gap-1'}>
         {items.filter((item) => isDesktop || !item.desktopOnly).map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <NavLink
@@ -49,7 +49,7 @@ function BottomNavigation({ variant = 'mobile' }) {
               <span className={`relative ${isDesktop ? 'flex items-center gap-3' : ''}`}>
                 <Icon size={18} />
                 {isDesktop ? <span>{label}</span> : null}
-                {label === 'Menu' && menuBadgeCount > 0 ? (
+                {label === 'Planejar' && menuBadgeCount > 0 ? (
                   <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
                     {menuBadgeCount > 9 ? '9+' : menuBadgeCount}
                   </span>

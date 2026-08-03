@@ -1,4 +1,4 @@
-import { FiBell, FiSearch } from 'react-icons/fi'
+import { FiBell } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import useAuth from '../../hooks/useAuth'
 import Avatar from '../common/Avatar'
@@ -33,12 +33,6 @@ function Header({ title, subtitle }) {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600"
-          >
-            <FiSearch size={18} />
-          </button>
           <Link
             to="/notifications"
             className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-600"

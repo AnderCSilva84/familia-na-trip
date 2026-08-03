@@ -35,6 +35,18 @@ export async function uploadTripCover(tripId, file) {
   return getDownloadURL(fileRef)
 }
 
+export async function uploadTripMenuImage(tripId, menuKey, file) {
+  ensureFirebaseConfigured()
+  if (!storage) throw new Error('Firebase Storage indisponível.')
+  if (!file?.type?.startsWith('image/')) throw new Error('Escolha um arquivo de imagem válido.')
+  if (file.size > 15 * 1024 * 1024) throw new Error('Cada imagem de menu deve ter no máximo 15 MB.')
+  const safeName = String(file.name || 'menu.jpg').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-')
+  const safeKey = String(menuKey).replace(/[^a-zA-Z0-9_-]/g, '')
+  const fileRef = ref(storage, `trips/${tripId}/covers/menus/${safeKey}-${Date.now()}-${safeName}`)
+  await uploadBytes(fileRef, file, { contentType: file.type })
+  return getDownloadURL(fileRef)
+}
+
 function mapTrip(id, data) {
   const isLegacyMaragogiTrip = String(data.name ?? '').trim().toLowerCase().includes('maragogi')
   return {
@@ -45,6 +57,7 @@ function mapTrip(id, data) {
     endDate: data.endDate ?? '',
     coverImage: data.coverImage ?? '',
     nextStopImage: data.nextStopImage ?? '',
+    menuImages: data.menuImages && typeof data.menuImages === 'object' ? data.menuImages : {},
     totalBudget: Number(data.totalBudget ?? 0),
     tripFund: Number(data.tripFund ?? 0),
     agendaTypes: Array.isArray(data.agendaTypes) ? data.agendaTypes : [],
@@ -72,6 +85,7 @@ export async function createTrip(data) {
     endDate: data.endDate,
     coverImage: data.coverImage ?? '',
     nextStopImage: data.nextStopImage ?? '',
+    menuImages: data.menuImages && typeof data.menuImages === 'object' ? data.menuImages : {},
     totalBudget: Number(data.totalBudget ?? 0),
     tripFund: Number(data.tripFund ?? 0),
     agendaTypes: Array.isArray(data.agendaTypes) ? data.agendaTypes : [],
